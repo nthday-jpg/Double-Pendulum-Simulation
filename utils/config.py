@@ -1,10 +1,12 @@
 from dataclasses import dataclass
 
-"""
-    This is cfg object passed to logging utilities.
-"""
+
 @dataclass
 class Config:
+    """
+        This is cfg object passed to logging utilities.
+    """
+    
     # experiment
     run_name: str
     seed: int = 0

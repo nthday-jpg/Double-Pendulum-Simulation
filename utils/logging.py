@@ -3,17 +3,19 @@ import csv
 import yaml
 from torch.utils.tensorboard import SummaryWriter
 
-"""
-Initialize the directory structure and logging utilities for a new experiment run.
-Args:
-    cfg: Configuration object containing run parameters.
-Returns:    
-    writer: CSV DictWriter for logging metrics.
-    csv_file: Open CSV file handle.
-    tb: TensorBoard SummaryWriter.
-    run_dir: Path to the run directory.
-"""
+
 def init_run(cfg):
+    """
+        Initialize the directory structure and logging utilities for a new experiment run.
+        Args:
+            cfg: Configuration object containing run parameters.
+        Returns:    
+            writer: CSV DictWriter for logging metrics.
+            csv_file: Open CSV file handle.
+            tb: TensorBoard SummaryWriter.
+            run_dir: Path to the run directory.
+    """
+    
     run_dir = os.path.join("runs", cfg.run_name)
     os.makedirs(run_dir, exist_ok=False)
 
