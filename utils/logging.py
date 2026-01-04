@@ -2,7 +2,7 @@ import os
 import csv
 import yaml
 from torch.utils.tensorboard import SummaryWriter
-
+import torch
 
 def init_run(cfg):
     """
@@ -46,3 +46,17 @@ def init_run(cfg):
     tb = SummaryWriter(log_dir=os.path.join(run_dir, "tb"))
 
     return writer, csv_file, tb, run_dir
+
+def save_checkpoint(model, is_best, run_dir, epoch, save_frequency=100):
+    """Save best model only (simplified for PINNs)."""
+    
+    # Save periodic checkpoint (optional, for long training)
+    if epoch % save_frequency == 0:
+        filename = f"checkpoint_epoch_{epoch}.pth"
+        filepath = os.path.join(run_dir, "checkpoints", filename)
+        torch.save(model.state_dict(), filepath)
+    
+    # Always save best
+    if is_best:
+        best_filepath = os.path.join(run_dir, "checkpoints", "best_model.pth")
+        torch.save(model.state_dict(), best_filepath)
