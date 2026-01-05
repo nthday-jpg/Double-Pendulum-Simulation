@@ -1,14 +1,31 @@
-# Python-generated files
+# Training runs and logs
+runs/
+*.pth
+*.pt
+
+# TensorBoard
+events.out.tfevents.*
+
+# Python
 __pycache__/
-*.py[oc]
-build/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
 dist/
-wheels/
-*.egg-info
+build/
 
-# Virtual environments
-.venv
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
 
-# IDE files
+# IDE
 .vscode/
+.idea/
+*.swp
+
+# Data (if you add datasets later)
+data/
+*.csv
 
