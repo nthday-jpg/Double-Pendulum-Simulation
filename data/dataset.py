@@ -2,6 +2,7 @@ from torch.utils.data import Dataset, DataLoader
 import torch
 import numpy as np
 import json
+from utils.config import Config
 
 class PendulumDataset(Dataset):
     """
@@ -79,14 +80,20 @@ class MixedDataset(Dataset):
             return t, dummy_state, 1
         
 def get_dataloader(data_path, parameters_path, 
-                   tmin, tmax, n_collocation,
-                   batch_size=32, num_workers=1, shuffle=True,
-                   val_split=0.2, data_fraction=0.1):
+                   config: Config,
+                   num_workers=1, shuffle=True,
+                   val_split=0.2):
     """ 
         Data_fraction: Fraction of training samples per epoch that are data points. \\
         Ndata / (Ndata + Ncollocation) = data_fraction \\
         n_collocation: Number of collocation points to use 
     """
+    tmin = config.t_min
+    tmax = config.t_max
+    n_collocation = config.n_collocation
+    data_fraction = config.data_fraction
+    batch_size = config.batch_size
+
     data_dataset = PendulumDataset(data_path, parameters_path)
     collocation_dataset = CollocationDataset(tmin, tmax, n_collocation)
 
