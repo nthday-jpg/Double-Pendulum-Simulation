@@ -4,7 +4,7 @@ import csv
 import yaml
 from torch.utils.tensorboard import SummaryWriter
 import torch
-from config import Config
+from utils.config import Config
 
 def init_run(cfg):
     """
