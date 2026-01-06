@@ -1,5 +1,4 @@
 import torch
-from physics.equations import M_fn, C_fn
 from physics.physics_loss import physics_residual, compute_derivatives
 
 def compute_loss(model, batch, weight_data=1.0, weight_phys=1.0):

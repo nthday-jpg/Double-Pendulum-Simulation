@@ -208,4 +208,18 @@ def build_physics_functions():
 
     return M_fn, C_fn
 
-M_fn, C_fn = build_physics_functions()
+M_fn, C_fn = None, None
+
+def _ensure_built():
+    global M_fn, C_fn
+    if M_fn is None:
+        import torch  # Ensure torch is imported
+        M_fn, C_fn = build_physics_functions()
+
+def get_M_fn():
+    _ensure_built()
+    return M_fn
+
+def get_C_fn():
+    _ensure_built()
+    return C_fn
