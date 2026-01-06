@@ -91,24 +91,28 @@ def build_physics_functions():
     th1_d, th2_d = sym["theta1_dot"], sym["theta2_dot"]
     m1, m2, l1, l2, g = sym["parameters"]
 
-    # Lambdify with torch module object instead of string
-    M_functions = []
+    # Lambdify each element of the matrix/vector separately
+    # M is (2, 2) matrix
+    M_elements = []
     for i in range(2):
         row = []
         for j in range(2):
             row.append(sp.lambdify((th1, th2, m1, m2, l1, l2), 
-                                   M_sym[i, j],
-                                   modules=torch))  # Changed from "torch" to torch
-        M_functions.append(row)
-
-    C_functions = []
+                                   M_sym[i, j], 
+                                   modules="torch"))
+        M_elements.append(row)
+    
+    # C is (2, 1) vector
+    C_elements = []
     for i in range(2):
-        C_functions.append(sp.lambdify((th1, th2, dth1, dth2, m1, m2, l1, l2, g),
-                                       C_sym[i],
-                                       modules=torch))  # Changed from "torch" to torch
+        C_elements.append(sp.lambdify((th1, th2, th1_d, th2_d, m1, m2, l1, l2, g), 
+                                      C_sym[i], 
+                                      modules="torch"))
 
-    def M_fn(theta1, theta2, m1_val, m2_val, l1_val, l2_val):
+    def M_fn(theta1, theta2, m1, m2, l1, l2):
         """Returns M matrix as torch tensor (N, 2, 2) or (2, 2)"""
+        import torch
+        
         # Determine if we're in batch mode
         is_batch = isinstance(theta1, torch.Tensor) and theta1.ndim > 0
         
@@ -119,21 +123,21 @@ def build_physics_functions():
             dtype = theta1.dtype
             
             # Expand scalar parameters to match batch
-            if isinstance(m1_val, torch.Tensor) and m1_val.ndim == 0:
-                m1_exp = m1_val.expand(batch_size)
-                m2_exp = m2_val.expand(batch_size)
-                l1_exp = l1_val.expand(batch_size)
-                l2_exp = l2_val.expand(batch_size)
+            if isinstance(m1, torch.Tensor) and m1.ndim == 0:
+                m1_exp = m1.expand(batch_size)
+                m2_exp = m2.expand(batch_size)
+                l1_exp = l1.expand(batch_size)
+                l2_exp = l2.expand(batch_size)
             else:
-                m1_exp, m2_exp, l1_exp, l2_exp = m1_val, m2_val, l1_val, l2_val
+                m1_exp, m2_exp, l1_exp, l2_exp = m1, m2, l1, l2
         else:
-            m1_exp, m2_exp, l1_exp, l2_exp = m1_val, m2_val, l1_val, l2_val
+            m1_exp, m2_exp, l1_exp, l2_exp = m1, m2, l1, l2
         
         # Compute each element
-        M00 = M_functions[0][0](theta1, theta2, m1_exp, m2_exp, l1_exp, l2_exp)
-        M01 = M_functions[0][1](theta1, theta2, m1_exp, m2_exp, l1_exp, l2_exp)
-        M10 = M_functions[1][0](theta1, theta2, m1_exp, m2_exp, l1_exp, l2_exp)
-        M11 = M_functions[1][1](theta1, theta2, m1_exp, m2_exp, l1_exp, l2_exp)
+        M00 = M_elements[0][0](theta1, theta2, m1_exp, m2_exp, l1_exp, l2_exp)
+        M01 = M_elements[0][1](theta1, theta2, m1_exp, m2_exp, l1_exp, l2_exp)
+        M10 = M_elements[1][0](theta1, theta2, m1_exp, m2_exp, l1_exp, l2_exp)
+        M11 = M_elements[1][1](theta1, theta2, m1_exp, m2_exp, l1_exp, l2_exp)
         
         # Convert to tensors if they aren't already
         if not isinstance(M00, torch.Tensor):
@@ -161,7 +165,7 @@ def build_physics_functions():
         
         return M
 
-    def C_fn(theta1, theta2, dtheta1, dtheta2, m1_val, m2_val, l1_val, l2_val, g_val):
+    def C_fn(theta1, theta2, theta1_dot, theta2_dot, m1, m2, l1, l2, g):
         """Returns C vector as torch tensor (N, 2) or (2,)"""
         # Determine if we're in batch mode
         is_batch = isinstance(theta1, torch.Tensor) and theta1.ndim > 0
@@ -171,20 +175,20 @@ def build_physics_functions():
             batch_size = theta1.shape[0]
             
             # Expand scalar parameters to match batch
-            if isinstance(m1_val, torch.Tensor) and m1_val.ndim == 0:
-                m1_exp = m1_val.expand(batch_size)
-                m2_exp = m2_val.expand(batch_size)
-                l1_exp = l1_val.expand(batch_size)
-                l2_exp = l2_val.expand(batch_size)
-                g_exp = g_val.expand(batch_size)
+            if isinstance(m1, torch.Tensor) and m1.ndim == 0:
+                m1_exp = m1.expand(batch_size)
+                m2_exp = m2.expand(batch_size)
+                l1_exp = l1.expand(batch_size)
+                l2_exp = l2.expand(batch_size)
+                g_exp = g.expand(batch_size)
             else:
-                m1_exp, m2_exp, l1_exp, l2_exp, g_exp = m1_val, m2_val, l1_val, l2_val, g_val
+                m1_exp, m2_exp, l1_exp, l2_exp, g_exp = m1, m2, l1, l2, g
         else:
-            m1_exp, m2_exp, l1_exp, l2_exp, g_exp = m1_val, m2_val, l1_val, l2_val, g_val
+            m1_exp, m2_exp, l1_exp, l2_exp, g_exp = m1, m2, l1, l2, g
         
         # Compute each element
-        C0 = C_functions[0](theta1, theta2, dtheta1, dtheta2, m1_exp, m2_exp, l1_exp, l2_exp, g_exp)
-        C1 = C_functions[1](theta1, theta2, dtheta1, dtheta2, m1_exp, m2_exp, l1_exp, l2_exp, g_exp)
+        C0 = C_elements[0](theta1, theta2, theta1_dot, theta2_dot, m1_exp, m2_exp, l1_exp, l2_exp, g_exp)
+        C1 = C_elements[1](theta1, theta2, theta1_dot, theta2_dot, m1_exp, m2_exp, l1_exp, l2_exp, g_exp)
         
         # Convert to tensors if they aren't already
         if not isinstance(C0, torch.Tensor):
