@@ -11,23 +11,23 @@ def derive_double_pendulum_dynamics():
     # Define symbols
     m1, m2, l1, l2, g = sp.symbols('m1 m2 l1 l2 g')
     t = sp.symbols('t')
-    theta1 = sp.Function('theta1')(t)
-    theta2 = sp.Function('theta2')(t)
-    theta1_dot, theta2_dot = sp.symbols('theta1_dot theta2_dot')
-    theta1_ddot, theta2_ddot = sp.symbols('theta1_ddot theta2_ddot')
+    th1 = sp.Function('th1')(t)
+    th2 = sp.Function('th2')(t)
+    th1_dot, th2_dot = sp.symbols('th1_dot th2_dot')
+    th1_ddot, th2_ddot = sp.symbols('th1_ddot th2_ddot')
 
     substitutions = {
-        sp.diff(theta1, t): theta1_dot,
-        sp.diff(theta2, t): theta2_dot,
-        sp.diff(theta1, t, t): theta1_ddot,
-        sp.diff(theta2, t, t): theta2_ddot
+        sp.diff(th1, t): th1_dot,
+        sp.diff(th2, t): th2_dot,
+        sp.diff(th1, t, t): th1_ddot,
+        sp.diff(th2, t, t): th2_ddot
     }
 
     # Define center of mass positions
-    x1 = l1/2 * sp.sin(theta1)
-    y1 = -l1/2 * sp.cos(theta1)
-    x2 = l1 * sp.sin(theta1) + l2/2 * sp.sin(theta2)
-    y2 = -l1 * sp.cos(theta1) - l2/2 * sp.cos(theta2)
+    x1 = l1/2 * sp.sin(th1)
+    y1 = -l1/2 * sp.cos(th1)
+    x2 = l1 * sp.sin(th1) + l2/2 * sp.sin(th2)
+    y2 = -l1 * sp.cos(th1) - l2/2 * sp.cos(th2)
 
     # Define velocities
     vx1 = sp.diff(x1, t)
@@ -38,8 +38,8 @@ def derive_double_pendulum_dynamics():
     v2_sq = vx2**2 + vy2**2 # type: ignore
 
     # Kinetic energy
-    K1 = sp.Rational(1, 2) * m1 * v1_sq + sp.Rational(1, 12) * m1 * l1**2 * sp.diff(theta1, t)**2
-    K2 = sp.Rational(1, 2) * m2 * v2_sq + sp.Rational(1, 12) * m2 * l2**2 * sp.diff(theta2, t)**2
+    K1 = sp.Rational(1, 2) * m1 * v1_sq + sp.Rational(1, 12) * m1 * l1**2 * sp.diff(th1, t)**2
+    K2 = sp.Rational(1, 2) * m2 * v2_sq + sp.Rational(1, 12) * m2 * l2**2 * sp.diff(th2, t)**2
     K = K1 + K2
 
     # Potential energy
@@ -49,10 +49,10 @@ def derive_double_pendulum_dynamics():
 
     # Lagrangian and equations of motion
     L = K - U
-    dL_dtheta1 = sp.diff(L, theta1)
-    dL_dtheta2 = sp.diff(L, theta2)
-    dL_dtheta1_dot = sp.diff(L, sp.diff(theta1, t))
-    dL_dtheta2_dot = sp.diff(L, sp.diff(theta2, t))
+    dL_dtheta1 = sp.diff(L, th1)
+    dL_dtheta2 = sp.diff(L, th2)
+    dL_dtheta1_dot = sp.diff(L, sp.diff(th1, t))
+    dL_dtheta2_dot = sp.diff(L, sp.diff(th2, t))
     ddt_dL_dtheta1_dot = sp.diff(dL_dtheta1_dot, t)
     ddt_dL_dtheta2_dot = sp.diff(dL_dtheta2_dot, t)
 
@@ -62,7 +62,7 @@ def derive_double_pendulum_dynamics():
     )
     R_sub = R.subs(substitutions).expand()
 
-    qdd = [theta1_ddot, theta2_ddot]
+    qdd = [th1_ddot, th2_ddot]
     M, rest = sp.linear_eq_to_matrix(R_sub, qdd)
     M.simplify()
     rest.simplify()
@@ -70,14 +70,15 @@ def derive_double_pendulum_dynamics():
     rest = rest.applyfunc(sp.nsimplify)
 
     symbols = {
-        'theta1': theta1,
-        'theta2': theta2,
-        'theta1_dot': theta1_dot,
-        'theta2_dot': theta2_dot,
+        'theta1': th1,
+        'theta2': th2,
+        'theta1_dot': th1_dot,
+        'theta2_dot': th2_dot,
         'parameters': (m1, m2, l1, l2, g)
     }
 
     return M, rest, symbols
+
 
 def build_physics_functions():
     """
@@ -87,33 +88,124 @@ def build_physics_functions():
         C_fn: function taking (th1, th2, th1_d, th2_d, m1, m2, l1, l2, g) and returning C
     """
     M_sym, C_sym, sym = derive_double_pendulum_dynamics()
+    th1, th2 = sym["theta1"], sym["theta2"]
+    th1_d, th2_d = sym["theta1_dot"], sym["theta2_dot"]
+    m1, m2, l1, l2, g = sym["parameters"]
 
-    th1, th2 = sp.symbols("th1 th2")
-    th1_d, th2_d = sp.symbols("th1_d th2_d")
+    # Lambdify each element of the matrix/vector separately
+    # M is (2, 2) matrix
+    M_elements = []
+    for i in range(2):
+        row = []
+        for j in range(2):
+            row.append(sp.lambdify((th1, th2, m1, m2, l1, l2), 
+                                   M_sym[i, j], 
+                                   modules="torch"))
+        M_elements.append(row)
+    
+    # C is (2, 1) vector
+    C_elements = []
+    for i in range(2):
+        C_elements.append(sp.lambdify((th1, th2, th1_d, th2_d, m1, m2, l1, l2, g), 
+                                      C_sym[i], 
+                                      modules="torch"))
 
-    M_sym = M_sym.subs({
-        sym["theta1"]: th1,
-        sym["theta2"]: th2,
-    })
+    def M_fn(theta1, theta2, m1, m2, l1, l2):
+        """Returns M matrix as torch tensor (N, 2, 2) or (2, 2)"""
+        import torch
+        
+        # Determine if we're in batch mode
+        is_batch = isinstance(theta1, torch.Tensor) and theta1.ndim > 0
+        
+        if is_batch:
+            # Ensure parameters are broadcast to batch size
+            batch_size = theta1.shape[0]
+            device = theta1.device
+            dtype = theta1.dtype
+            
+            # Expand scalar parameters to match batch
+            if isinstance(m1, torch.Tensor) and m1.ndim == 0:
+                m1_exp = m1.expand(batch_size)
+                m2_exp = m2.expand(batch_size)
+                l1_exp = l1.expand(batch_size)
+                l2_exp = l2.expand(batch_size)
+            else:
+                m1_exp, m2_exp, l1_exp, l2_exp = m1, m2, l1, l2
+        else:
+            m1_exp, m2_exp, l1_exp, l2_exp = m1, m2, l1, l2
+        
+        # Compute each element
+        M00 = M_elements[0][0](theta1, theta2, m1_exp, m2_exp, l1_exp, l2_exp)
+        M01 = M_elements[0][1](theta1, theta2, m1_exp, m2_exp, l1_exp, l2_exp)
+        M10 = M_elements[1][0](theta1, theta2, m1_exp, m2_exp, l1_exp, l2_exp)
+        M11 = M_elements[1][1](theta1, theta2, m1_exp, m2_exp, l1_exp, l2_exp)
+        
+        # Convert to tensors if they aren't already
+        if not isinstance(M00, torch.Tensor):
+            M00 = torch.tensor(M00, dtype=torch.float32)
+            M01 = torch.tensor(M01, dtype=torch.float32)
+            M10 = torch.tensor(M10, dtype=torch.float32)
+            M11 = torch.tensor(M11, dtype=torch.float32)
+        
+        # Stack into matrix
+        if is_batch:
+            N = theta1.shape[0]
+            device = theta1.device
+            dtype = theta1.dtype
+            M = torch.zeros(N, 2, 2, dtype=dtype, device=device)
+            M[:, 0, 0] = M00
+            M[:, 0, 1] = M01
+            M[:, 1, 0] = M10
+            M[:, 1, 1] = M11
+        else:
+            # Single point mode
+            M = torch.stack([
+                torch.stack([M00, M01]),
+                torch.stack([M10, M11])
+            ])
+        
+        return M
 
-    C_sym = C_sym.subs({
-        sym["theta1"]: th1,
-        sym["theta2"]: th2,
-        sym["theta1_dot"]: th1_d,
-        sym["theta2_dot"]: th2_d,
-    })
-
-    M_fn = sp.lambdify((th1, th2, sym["m1"], sym["m2"], 
-                        sym["l1"], sym["l2"]), 
-                        M_sym,
-                        modules="torch")
-    C_fn = sp.lambdify((th1, th2, th1_d, th2_d, 
-                        sym["m1"], sym["m2"], sym["l1"], 
-                        sym["l2"], sym["g"]), 
-                        C_sym, 
-                        modules="torch")
+    def C_fn(theta1, theta2, theta1_dot, theta2_dot, m1, m2, l1, l2, g):
+        """Returns C vector as torch tensor (N, 2) or (2,)"""
+        import torch
+        
+        # Determine if we're in batch mode
+        is_batch = isinstance(theta1, torch.Tensor) and theta1.ndim > 0
+        
+        if is_batch:
+            # Ensure parameters are broadcast to batch size
+            batch_size = theta1.shape[0]
+            
+            # Expand scalar parameters to match batch
+            if isinstance(m1, torch.Tensor) and m1.ndim == 0:
+                m1_exp = m1.expand(batch_size)
+                m2_exp = m2.expand(batch_size)
+                l1_exp = l1.expand(batch_size)
+                l2_exp = l2.expand(batch_size)
+                g_exp = g.expand(batch_size)
+            else:
+                m1_exp, m2_exp, l1_exp, l2_exp, g_exp = m1, m2, l1, l2, g
+        else:
+            m1_exp, m2_exp, l1_exp, l2_exp, g_exp = m1, m2, l1, l2, g
+        
+        # Compute each element
+        C0 = C_elements[0](theta1, theta2, theta1_dot, theta2_dot, m1_exp, m2_exp, l1_exp, l2_exp, g_exp)
+        C1 = C_elements[1](theta1, theta2, theta1_dot, theta2_dot, m1_exp, m2_exp, l1_exp, l2_exp, g_exp)
+        
+        # Convert to tensors if they aren't already
+        if not isinstance(C0, torch.Tensor):
+            C0 = torch.tensor(C0, dtype=torch.float32)
+            C1 = torch.tensor(C1, dtype=torch.float32)
+        
+        # Stack into vector
+        if is_batch:
+            C = torch.stack([C0, C1], dim=1)  # (N, 2)
+        else:
+            C = torch.stack([C0, C1])
+        
+        return C
 
     return M_fn, C_fn
-
 
 M_fn, C_fn = build_physics_functions()

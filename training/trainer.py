@@ -34,7 +34,7 @@ class Trainer:
             
             for batch in self.train_loader:
                 t, state, point_type = batch
-                t = t.to(self.device)
+                t = t.to(self.device).requires_grad_(True)
                 state = state.to(self.device)
                 point_type = point_type.to(self.device)
                 
@@ -100,21 +100,20 @@ class Trainer:
         self.model.eval()
         total_val_loss = 0.0
         
-        with torch.no_grad():
-            for batch in val_loader:
-                t, state = batch  # Val loader only returns (t, state)
-                t = t.to(self.device)
-                state = state.to(self.device)
-                
-                # Create dummy point_type for validation (all data points)
-                point_type = torch.zeros(t.size(0), dtype=torch.long, device=self.device)
-                
-                loss, _ = compute_loss(
-                    self.model, (t, state, point_type),
-                    weight_data=self.config.data_weight,
-                    weight_phys=self.config.physics_weight
-                )
-                total_val_loss += loss.item() * t.size(0)
+        for batch in val_loader:
+            t, state = batch  # Val loader only returns (t, state)
+            t = t.to(self.device)
+            state = state.to(self.device)
+            
+            # Create dummy point_type for validation (all data points)
+            point_type = torch.zeros(t.size(0), dtype=torch.long, device=self.device)
+            
+            loss, _ = compute_loss(
+                self.model, (t, state, point_type),
+                weight_data=self.config.data_weight,
+                weight_phys=self.config.physics_weight
+            )
+            total_val_loss += loss.item() * t.size(0)
         
         avg_val_loss = total_val_loss / len(val_loader.dataset)
         return avg_val_loss

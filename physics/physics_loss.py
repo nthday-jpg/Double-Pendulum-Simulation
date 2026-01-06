@@ -1,4 +1,4 @@
-from equations import M_fn, C_fn
+from physics.equations import M_fn, C_fn
 import torch
 
 
@@ -33,14 +33,16 @@ def physics_residual(q, qdot, qdd, parameters):
         given q, qdot, qdd.
         parameters: dict with keys 'm1', 'm2', 'l1', 'l2', 'g'
     """
+    # Convert parameters to tensors on same device as q
+    device = q.device
+    m1 = torch.tensor(parameters['m1'], dtype=q.dtype, device=device)
+    m2 = torch.tensor(parameters['m2'], dtype=q.dtype, device=device)
+    l1 = torch.tensor(parameters['l1'], dtype=q.dtype, device=device)
+    l2 = torch.tensor(parameters['l2'], dtype=q.dtype, device=device)
+    g = torch.tensor(parameters['g'], dtype=q.dtype, device=device)
 
-    M = M_fn(q[:, 0], q[:, 1],        
-             parameters['m1'], parameters['m2'], 
-             parameters['l1'], parameters['l2'])          # (N, 2, 2)
-    C = C_fn(q[:, 0], q[:, 1],
-             qdot[:, 0], qdot[:, 1],
-             parameters['m1'], parameters['m2'], 
-             parameters['l1'], parameters['l2'], parameters['g'])   # (N, 2)
+    M = M_fn(q[:, 0], q[:, 1], m1, m2, l1, l2)  # (N, 2, 2)
+    C = C_fn(q[:, 0], q[:, 1], qdot[:, 0], qdot[:, 1], m1, m2, l1, l2, g)  # (N, 2)
 
     residual = M @ qdd.unsqueeze(-1) + C.unsqueeze(-1)
     residual = residual.squeeze(-1)  # (N, 2)
