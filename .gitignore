@@ -26,6 +26,6 @@ build/
 *.swp
 
 # Data (if you add datasets later)
-data/
+data/raw/
 *.csv
 

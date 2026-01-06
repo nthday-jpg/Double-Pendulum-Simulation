@@ -1,7 +1,6 @@
 import sympy as sp
 
 
-
 def derive_double_pendulum_dynamics():
     """
         Assume two rigid rods with uniformly distributed mass connected in series.
@@ -79,3 +78,42 @@ def derive_double_pendulum_dynamics():
     }
 
     return M, rest, symbols
+
+def build_physics_functions():
+    """
+        Builds numerical functions for the mass matrix M and rest vector C
+        of the double pendulum dynamics.
+        M_fn: function taking (th1, th2, m1, m2, l1, l2) and returning M
+        C_fn: function taking (th1, th2, th1_d, th2_d, m1, m2, l1, l2, g) and returning C
+    """
+    M_sym, C_sym, sym = derive_double_pendulum_dynamics()
+
+    th1, th2 = sp.symbols("th1 th2")
+    th1_d, th2_d = sp.symbols("th1_d th2_d")
+
+    M_sym = M_sym.subs({
+        sym["theta1"]: th1,
+        sym["theta2"]: th2,
+    })
+
+    C_sym = C_sym.subs({
+        sym["theta1"]: th1,
+        sym["theta2"]: th2,
+        sym["theta1_dot"]: th1_d,
+        sym["theta2_dot"]: th2_d,
+    })
+
+    M_fn = sp.lambdify((th1, th2, sym["m1"], sym["m2"], 
+                        sym["l1"], sym["l2"]), 
+                        M_sym,
+                        modules="torch")
+    C_fn = sp.lambdify((th1, th2, th1_d, th2_d, 
+                        sym["m1"], sym["m2"], sym["l1"], 
+                        sym["l2"], sym["g"]), 
+                        C_sym, 
+                        modules="torch")
+
+    return M_fn, C_fn
+
+
+M_fn, C_fn = build_physics_functions()
