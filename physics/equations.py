@@ -99,7 +99,7 @@ def build_physics_functions():
         for j in range(2):
             row.append(sp.lambdify((th1, th2, m1, m2, l1, l2), 
                                    M_sym[i, j], 
-                                   modules="torch"))
+                                   modules=torch))
         M_elements.append(row)
     
     # C is (2, 1) vector
@@ -107,7 +107,7 @@ def build_physics_functions():
     for i in range(2):
         C_elements.append(sp.lambdify((th1, th2, th1_d, th2_d, m1, m2, l1, l2, g), 
                                       C_sym[i], 
-                                      modules="torch"))
+                                      modules=torch))
 
     def M_fn(theta1, theta2, m1, m2, l1, l2):
         """Returns M matrix as torch tensor (N, 2, 2) or (2, 2)"""
