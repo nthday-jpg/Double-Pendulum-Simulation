@@ -8,6 +8,7 @@ dependencies = [
     "matplotlib>=3.10.8",
     "numpy>=2.4.0",
     "pandas>=2.3.3",
+    "pyyaml>=6.0.3",
     "scipy>=1.16.3",
     "sympy>=1.14.0",
     "tensorboard>=2.20.0",
