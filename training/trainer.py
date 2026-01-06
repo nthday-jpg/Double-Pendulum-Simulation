@@ -3,16 +3,16 @@ import torch
 import os
 import csv
 from models.pinn import PINN
-from losses import compute_loss
+from training.losses import compute_loss
 from utils.config import Config
 from utils.logging import init_run
 
 class Trainer:
-    def __init__(self, model: PINN, cfg: Config,
+    def __init__(self, model: PINN, config: Config,
                  train_loader, val_loader,
                  optimizer, scheduler=None):
         self.model = model
-        self.cfg = cfg
+        self.config = config
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.optimizer = optimizer
@@ -24,9 +24,9 @@ class Trainer:
         """
             Training loop for the PINN model.
         """
-        writer, csv_file, tb, run_dir = init_run(self.cfg)
+        writer, csv_file, tb, run_dir = init_run(self.config)
         
-        for epoch in range(self.cfg.epochs):
+        for epoch in range(self.config.epochs):
             self.model.train()
             total_train_loss = 0.0
             total_physics_loss = 0.0
@@ -41,13 +41,13 @@ class Trainer:
                 self.optimizer.zero_grad()
                 loss, loss_dict = compute_loss(
                     self.model, (t, state, point_type),
-                    weight_data=self.cfg.data_weight,
-                    weight_phys=self.cfg.physics_weight
+                    weight_data=self.config.data_weight,
+                    weight_phys=self.config.physics_weight
                 )
                 loss.backward()
                 
-                if self.cfg.grad_clip:
-                    nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.grad_clip)
+                if self.config.grad_clip:
+                    nn.utils.clip_grad_norm_(self.model.parameters(), self.config.grad_clip)
                 
                 self.optimizer.step()
                 
@@ -83,7 +83,7 @@ class Trainer:
             tb.add_scalar("Loss/Data", avg_data_loss, epoch + 1)
             
             if (epoch + 1) % 10 == 0:
-                print(f"Epoch {epoch+1}/{self.cfg.epochs} - "
+                print(f"Epoch {epoch+1}/{self.config.epochs} - "
                       f"Train: {avg_train_loss:.6f}, Val: {avg_val_loss:.6f}")
             
             if self.scheduler:
@@ -111,8 +111,8 @@ class Trainer:
                 
                 loss, _ = compute_loss(
                     self.model, (t, state, point_type),
-                    weight_data=self.cfg.data_weight,
-                    weight_phys=self.cfg.physics_weight
+                    weight_data=self.config.data_weight,
+                    weight_phys=self.config.physics_weight
                 )
                 total_val_loss += loss.item() * t.size(0)
         
