@@ -35,6 +35,8 @@ def init_run(cfg):
         "epoch",
         "train_loss",
         "val_loss",
+        "physics_loss",
+        "data_loss",
         "rollout_mse",
         "energy_drift"
     ]
