@@ -36,9 +36,9 @@ def generate_trajectory(
         double_pendulum_derivatives,
         t_span,
         initial_state,
-        args=(m1, m2, l1, l2, g),
+        args=((m1, m2, l1, l2, g),),
         t_eval=t_eval,
-        method='RK45',
+        method='DOP853',
         rtol=1e-8,
         atol=1e-10
     )
@@ -101,4 +101,4 @@ def generate_dataset(
 
 if __name__ == "__main__":
     print("=== Generating Dataset ===")
-    generate_dataset(num_trajectories=3, num_points=1000)
+    generate_dataset(num_trajectories=3, num_points=3000, t_span=(0, 10))

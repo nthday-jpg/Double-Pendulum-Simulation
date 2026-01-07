@@ -1,5 +1,5 @@
 import sympy as sp
-import numpy 
+import numpy as np
 from scipy.integrate import solve_ivp
 from functools import lru_cache
 
@@ -69,8 +69,6 @@ def derive_double_pendulum_dynamics():
     M, rest = sp.linear_eq_to_matrix(R_sub, qdd)
     M.simplify()
     rest.simplify()
-    M = M.applyfunc(sp.nsimplify)
-    rest = rest.applyfunc(sp.nsimplify)
 
     symbols = {
         'theta1': th1,
@@ -112,42 +110,33 @@ def build_numpy_functions():
     return M_func, C_func
 
 
-def double_pendulum_derivatives(t, y, m1, m2, l1, l2, g):
-    """
-    Compute derivatives for double pendulum system with uniform rods.
+# Globals to hold the built numpy functions
+_M_func_numpy, _C_func_numpy = None, None
+
+
+def _ensure_numpy_built():
+    global _M_func_numpy, _C_func_numpy
+    if _M_func_numpy is None:
+        _M_func_numpy, _C_func_numpy = build_numpy_functions()
+
+
+def double_pendulum_derivatives(t, y, params):
+    _ensure_numpy_built()
     
-    State vector y = [theta1, theta2, omega1, omega2]
-    Returns: dy/dt = [omega1, omega2, alpha1, alpha2]
-    
-    Uses direct formulation verified against Marion & Thornton Classical Dynamics.
-    """
     theta1, theta2, omega1, omega2 = y
+    m1, m2, l1, l2, g = params
+
+    M = _M_func_numpy(theta1, theta2, m1, m2, l1, l2)
+    rest = _C_func_numpy(theta1, theta2, omega1, omega2, m1, m2, l1, l2, g)
+
+    # Ensure rest is a 1D array
+    rest = np.array(rest).flatten()
     
-    delta = theta2 - theta1
-    c = numpy.cos(delta)
-    s = numpy.sin(delta)
-    
-    # Mass matrix elements for uniform rods
-    # Rod moment of inertia about pivot: I = I_cm + m*d^2 = (1/12)*m*l^2 + m*(l/2)^2 = (1/3)*m*l^2
-    M11 = (1/3) * m1 * l1**2 + m2 * l1**2
-    M12 = (1/2) * m2 * l1 * l2 * c
-    M21 = M12
-    M22 = (1/3) * m2 * l2**2
-    
-    # Right-hand side (Coriolis, centrifugal, gravity terms)
-    h1 = (-(1/2) * m2 * l1 * l2 * omega2**2 * s 
-          - (1/2) * m1 * g * l1 * numpy.sin(theta1) 
-          - m2 * g * l1 * numpy.sin(theta1))
-    
-    h2 = ((1/2) * m2 * l1 * l2 * omega1**2 * s 
-          - (1/2) * m2 * g * l2 * numpy.sin(theta2))
-    
-    # Solve M * alpha = h for angular accelerations
-    det = M11 * M22 - M12 * M21
-    alpha1 = (M22 * h1 - M12 * h2) / det
-    alpha2 = (M11 * h2 - M21 * h1) / det
-    
-    return [omega1, omega2, alpha1, alpha2]
+    # Đụ má cái này để rest chứ không phải trừ rest nguyên một ngày của tao quá mệt rồi
+    gamma = np.linalg.solve(M, rest)
+
+    return np.array([omega1, omega2, gamma[0], gamma[1]])
+
 
 def compute_energy(q, qdot, m1, m2, l1, l2, g):
     """
@@ -158,19 +147,19 @@ def compute_energy(q, qdot, m1, m2, l1, l2, g):
     omega1, omega2 = qdot[:, 0], qdot[:, 1]
     
     # Center of mass positions
-    y1 = -l1/2 * numpy.cos(theta1)
-    y2 = -l1 * numpy.cos(theta1) - l2/2 * numpy.cos(theta2)
+    y1 = -l1/2 * np.cos(theta1)
+    y2 = -l1 * np.cos(theta1) - l2/2 * np.cos(theta2)
     
     # Potential energy
     U = m1 * g * y1 + m2 * g * y2
     
     # Velocities of centers of mass
     # v_cm = d/dt(position), using chain rule: d/dt = omega * d/dtheta
-    vx1 = l1/2 * omega1 * numpy.cos(theta1)
-    vy1 = l1/2 * omega1 * numpy.sin(theta1)
+    vx1 = l1/2 * omega1 * np.cos(theta1)
+    vy1 = l1/2 * omega1 * np.sin(theta1)
     
-    vx2 = l1 * omega1 * numpy.cos(theta1) + l2/2 * omega2 * numpy.cos(theta2)
-    vy2 = l1 * omega1 * numpy.sin(theta1) + l2/2 * omega2 * numpy.sin(theta2)
+    vx2 = l1 * omega1 * np.cos(theta1) + l2/2 * omega2 * np.cos(theta2)
+    vy2 = l1 * omega1 * np.sin(theta1) + l2/2 * omega2 * np.sin(theta2)
     
     # Kinetic energy: translational + rotational
     K_trans_1 = 0.5 * m1 * (vx1**2 + vy1**2)
@@ -324,3 +313,11 @@ def get_M_fn():
 def get_C_fn():
     _ensure_built()
     return C_fn
+
+if __name__ == "__main__":
+    # Test the derivation
+    M, rest, symbols = derive_double_pendulum_dynamics()
+    print("Mass Matrix M:")
+    sp.pprint(M)
+    print("\nRest Vector C:")
+    sp.pprint(rest)
