@@ -1,5 +1,5 @@
 import sympy as sp
-import numpy as np
+import numpy 
 from scipy.integrate import solve_ivp
 from functools import lru_cache
 
@@ -40,9 +40,9 @@ def derive_double_pendulum_dynamics():
     v1_sq = vx1**2 + vy1**2 # type: ignore
     v2_sq = vx2**2 + vy2**2 # type: ignore
 
-    # Kinetic energy
-    K1 = sp.Rational(1, 2) * m1 * v1_sq + sp.Rational(1, 12) * m1 * l1**2 * sp.diff(th1, t)**2
-    K2 = sp.Rational(1, 2) * m2 * v2_sq + sp.Rational(1, 12) * m2 * l2**2 * sp.diff(th2, t)**2
+    # Kinetic energy (translational + rotational about center of mass)
+    K1 = sp.Rational(1, 2) * m1 * v1_sq + sp.Rational(1, 2) * (sp.Rational(1, 12) * m1 * l1**2) * sp.diff(th1, t)**2
+    K2 = sp.Rational(1, 2) * m2 * v2_sq + sp.Rational(1, 2) * (sp.Rational(1, 12) * m2 * l2**2) * sp.diff(th2, t)**2
     K = K1 + K2
 
     # Potential energy
@@ -99,13 +99,13 @@ def build_numpy_functions():
     M_func = sp.lambdify(
         (th1, th2, m1, m2, l1, l2),
         M_sym,
-        modules=numpy
+        modules="numpy"
     )
     
     C_func = sp.lambdify(
         (th1, th2, th1_d, th2_d, m1, m2, l1, l2, g),
         C_sym,
-        modules=numpy
+        modules="numpy"
     )
     
     print("Symbolic derivation complete!")
@@ -114,28 +114,74 @@ def build_numpy_functions():
 
 def double_pendulum_derivatives(t, y, m1, m2, l1, l2, g):
     """
-    Compute derivatives for double pendulum system using derived equations.
+    Compute derivatives for double pendulum system with uniform rods.
     
     State vector y = [theta1, theta2, omega1, omega2]
-    Returns: dy/dt = [omega1, omega2, gamma1, gamma2]
+    Returns: dy/dt = [omega1, omega2, alpha1, alpha2]
     
-    Solves: M(q) * qdd + C(q, qdot) = 0  =>  qdd = -M^(-1) * C
+    Uses direct formulation verified against Marion & Thornton Classical Dynamics.
     """
     theta1, theta2, omega1, omega2 = y
     
-    # Get the numerical functions (cached)
-    M_func, C_func = build_numpy_functions()
+    delta = theta2 - theta1
+    c = numpy.cos(delta)
+    s = numpy.sin(delta)
     
-    # Evaluate M and C at current state
-    M = np.array(M_func(theta1, theta2, m1, m2, l1, l2), dtype=float)
-    C = np.array(C_func(theta1, theta2, omega1, omega2, m1, m2, l1, l2, g), dtype=float).flatten()
+    # Mass matrix elements for uniform rods
+    # Rod moment of inertia about pivot: I = I_cm + m*d^2 = (1/12)*m*l^2 + m*(l/2)^2 = (1/3)*m*l^2
+    M11 = (1/3) * m1 * l1**2 + m2 * l1**2
+    M12 = (1/2) * m2 * l1 * l2 * c
+    M21 = M12
+    M22 = (1/3) * m2 * l2**2
     
-    # Solve M*qdd + C = 0  =>  qdd = -M^(-1) * C
-    qdd = -np.linalg.solve(M, C)
+    # Right-hand side (Coriolis, centrifugal, gravity terms)
+    h1 = (-(1/2) * m2 * l1 * l2 * omega2**2 * s 
+          - (1/2) * m1 * g * l1 * numpy.sin(theta1) 
+          - m2 * g * l1 * numpy.sin(theta1))
     
-    gamma1, gamma2 = qdd
+    h2 = ((1/2) * m2 * l1 * l2 * omega1**2 * s 
+          - (1/2) * m2 * g * l2 * numpy.sin(theta2))
     
-    return [omega1, omega2, gamma1, gamma2]
+    # Solve M * alpha = h for angular accelerations
+    det = M11 * M22 - M12 * M21
+    alpha1 = (M22 * h1 - M12 * h2) / det
+    alpha2 = (M11 * h2 - M21 * h1) / det
+    
+    return [omega1, omega2, alpha1, alpha2]
+
+def compute_energy(q, qdot, m1, m2, l1, l2, g):
+    """
+    Compute total energy for verification (uniform rods).
+    Matches the Lagrangian used in derive_double_pendulum_dynamics.
+    """
+    theta1, theta2 = q[:, 0], q[:, 1]
+    omega1, omega2 = qdot[:, 0], qdot[:, 1]
+    
+    # Center of mass positions
+    y1 = -l1/2 * numpy.cos(theta1)
+    y2 = -l1 * numpy.cos(theta1) - l2/2 * numpy.cos(theta2)
+    
+    # Potential energy
+    U = m1 * g * y1 + m2 * g * y2
+    
+    # Velocities of centers of mass
+    # v_cm = d/dt(position), using chain rule: d/dt = omega * d/dtheta
+    vx1 = l1/2 * omega1 * numpy.cos(theta1)
+    vy1 = l1/2 * omega1 * numpy.sin(theta1)
+    
+    vx2 = l1 * omega1 * numpy.cos(theta1) + l2/2 * omega2 * numpy.cos(theta2)
+    vy2 = l1 * omega1 * numpy.sin(theta1) + l2/2 * omega2 * numpy.sin(theta2)
+    
+    # Kinetic energy: translational + rotational
+    K_trans_1 = 0.5 * m1 * (vx1**2 + vy1**2)
+    K_rot_1 = 0.5 * (1/12 * m1 * l1**2) * omega1**2  # (1/2) * I * omega^2
+    
+    K_trans_2 = 0.5 * m2 * (vx2**2 + vy2**2)
+    K_rot_2 = 0.5 * (1/12 * m2 * l2**2) * omega2**2
+    
+    K = K_trans_1 + K_rot_1 + K_trans_2 + K_rot_2
+    
+    return K + U
 
 @lru_cache(maxsize=1)
 def build_torch_functions():

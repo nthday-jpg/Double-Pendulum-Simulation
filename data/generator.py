@@ -2,7 +2,7 @@ from scipy.integrate import solve_ivp
 import numpy as np
 import os
 import json
-from physics.equations import double_pendulum_derivatives
+from physics.equations import double_pendulum_derivatives, compute_energy
 
 def generate_trajectory(
     initial_state,
@@ -52,34 +52,6 @@ def generate_trajectory(
     
     return t, q, qdot
 
-
-def compute_energy(q, qdot, m1, m2, l1, l2, g):
-    """
-    Compute total energy for verification.
-    """
-    theta1, theta2 = q[:, 0], q[:, 1]
-    omega1, omega2 = qdot[:, 0], qdot[:, 1]
-    
-    # Center of mass positions
-    y1 = -l1/2 * np.cos(theta1)
-    y2 = -l1 * np.cos(theta1) - l2/2 * np.cos(theta2)
-    
-    # Potential energy
-    U = m1 * g * y1 + m2 * g * y2
-    
-    # Kinetic energy
-    vx1 = l1/2 * omega1 * np.cos(theta1)
-    vy1 = l1/2 * omega1 * np.sin(theta1)
-    vx2 = l1 * omega1 * np.cos(theta1) + l2/2 * omega2 * np.cos(theta2)
-    vy2 = l1 * omega1 * np.sin(theta1) + l2/2 * omega2 * np.sin(theta2)
-    
-    K_trans = 0.5 * m1 * (vx1**2 + vy1**2) + 0.5 * m2 * (vx2**2 + vy2**2)
-    K_rot = (1/12) * m1 * l1**2 * omega1**2 + (1/12) * m2 * l2**2 * omega2**2
-    
-    return K_trans + K_rot + U
-
-
-
 def generate_dataset(
     output_dir="data/raw",
     num_trajectories=5,
@@ -105,10 +77,10 @@ def generate_dataset(
     
     for i in range(num_trajectories):
         initial_state = [
-            np.random.uniform(-np.pi, np.pi),  # theta1
-            np.random.uniform(-np.pi, np.pi),  # theta2
-            np.random.uniform(-2, 2),          # omega1
-            np.random.uniform(-2, 2)           # omega2
+            np.random.uniform(-np.pi/2, np.pi/2),  # theta1: smaller angles
+            np.random.uniform(-np.pi/2, np.pi/2),  # theta2: smaller angles
+            np.random.uniform(-1, 1),               # omega1: lower velocities
+            np.random.uniform(-1, 1)                # omega2: lower velocities
         ]
         
         t, q, qdot = generate_trajectory(initial_state, t_span, num_points, **parameters)
