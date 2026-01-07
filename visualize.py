@@ -123,8 +123,15 @@ def plot_trajectories(data_dir='data/raw'):
     plt.show()
 
 
-def animate_trajectory(traj_idx=0, data_dir='data/raw'):
-    """Create an animation of a specific trajectory."""
+def animate_trajectory(traj_idx=0, data_dir='data/raw', save_format='gif', frame_skip=5):
+    """Create an animation of a specific trajectory.
+    
+    Args:
+        traj_idx: Index of trajectory to animate
+        data_dir: Directory containing trajectory data
+        save_format: 'gif' or 'mp4' (mp4 requires ffmpeg)
+        frame_skip: Use every Nth frame (higher = faster generation, smaller file)
+    """
     data_path = Path(data_dir)
     
     # Load parameters and trajectory
@@ -137,10 +144,16 @@ def animate_trajectory(traj_idx=0, data_dir='data/raw'):
         return
     
     t, q, qdot = load_trajectory(traj_file)
+    
+    # Downsample for performance and memory efficiency
+    t = t[::frame_skip]
+    q = q[::frame_skip]
+    qdot = qdot[::frame_skip]
+    
     x1, y1, x2, y2 = pendulum_positions(q, l1, l2)
     
-    # Set up the figure
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+    # Set up the figure (smaller size for memory efficiency)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
     
     # Animation plot
     ax1.set_xlim(-2.5, 2.5)
@@ -209,15 +222,41 @@ def animate_trajectory(traj_idx=0, data_dir='data/raw'):
     
     # Save animation
     print(f"Creating animation for trajectory {traj_idx}...")
-    anim.save(f'double_pendulum_animation_{traj_idx}.gif', writer='pillow', fps=30)
-    print(f"Saved double_pendulum_animation_{traj_idx}.gif")
+    print(f"Using {len(t)} frames (downsampled from original by factor of {frame_skip})")
     
-    plt.show()
+    if save_format == 'mp4':
+        # MP4 is more memory efficient but requires ffmpeg
+        try:
+            anim.save(
+                f'double_pendulum_animation_{traj_idx}.mp4',
+                writer='ffmpeg',
+                fps=30,
+                dpi=80,
+                bitrate=1800
+            )
+            print(f"Saved double_pendulum_animation_{traj_idx}.mp4")
+        except Exception as e:
+            print(f"Error saving MP4: {e}")
+            print("Try installing ffmpeg or use save_format='gif'")
+    else:
+        # GIF with optimized settings
+        anim.save(
+            f'double_pendulum_animation_{traj_idx}.gif',
+            writer='pillow',
+            fps=15,  # Lower FPS for smaller file
+            dpi=80   # Lower DPI to reduce memory usage
+        )
+        print(f"Saved double_pendulum_animation_{traj_idx}.gif")
+    
+    plt.close(fig)  # Free memory
+    print("Animation complete!")
 
 
 if __name__ == '__main__':
     # Create animation for the first trajectory
-    animate_trajectory(0)
+    # Use frame_skip to control speed/memory (higher = faster generation)
+    # Use save_format='mp4' if you have ffmpeg installed (more efficient)
+    animate_trajectory(0, frame_skip=10, save_format='gif')
     
     # Optionally plot all trajectories
     # plot_trajectories()
