@@ -5,7 +5,7 @@ import csv
 from models.pinn import PINN
 from training.losses import compute_loss
 from utils.config import Config
-from utils.logging import init_run
+from utils.logging import init_run, save_checkpoint, load_checkpoint
 
 class Trainer:
     def __init__(self, model: PINN, config: Config,
@@ -20,78 +20,126 @@ class Trainer:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
 
+        self.best_val_loss = float('inf')
+        self.best_model_path = None
+        self.patience_counter = 0
+
     def train(self):
         """
             Training loop for the PINN model.
         """
         writer, csv_file, tb, run_dir = init_run(self.config)
+        self.best_model_path = os.path.join(run_dir, "checkpoints", "best_model.pth")
+        epoch = 0  # Initialize to avoid unbound variable
         
-        for epoch in range(self.config.epochs):
-            self.model.train()
-            total_train_loss = 0.0
-            total_physics_loss = 0.0
-            total_data_loss = 0.0
-            
-            for batch in self.train_loader:
-                t, state, point_type = batch
-                t = t.to(self.device).requires_grad_(True)
-                state = state.to(self.device)
-                point_type = point_type.to(self.device)
+        try: 
+            for epoch in range(self.config.epochs):
+                self.model.train()
+                total_train_loss = 0.0
+                total_physics_loss = 0.0
+                total_data_loss = 0.0
                 
-                self.optimizer.zero_grad()
-                loss, loss_dict = compute_loss(
-                    self.model, (t, state, point_type),
-                    weight_data=self.config.data_weight,
-                    weight_phys=self.config.physics_weight
-                )
-                loss.backward()
+                for batch in self.train_loader:
+                    t, state, point_type = batch
+                    t = t.to(self.device).requires_grad_(True)
+                    state = state.to(self.device)
+                    point_type = point_type.to(self.device)
+                    
+                    self.optimizer.zero_grad()
+                    loss, loss_dict = compute_loss(
+                        self.model, (t, state, point_type),
+                        weight_data=self.config.data_weight,
+                        weight_phys=self.config.physics_weight
+                    )
+                    loss.backward()
+                    
+                    if self.config.grad_clip:
+                        nn.utils.clip_grad_norm_(self.model.parameters(), self.config.grad_clip)
+                    
+                    self.optimizer.step()
+                    
+                    # Accumulate losses
+                    batch_size = t.size(0)
+                    total_train_loss += loss.item() * batch_size
+                    total_physics_loss += loss_dict["physics_loss"] * batch_size
+                    total_data_loss += loss_dict["data_loss"] * batch_size
                 
-                if self.config.grad_clip:
-                    nn.utils.clip_grad_norm_(self.model.parameters(), self.config.grad_clip)
+                # Compute epoch averages
+                dataset_size = len(self.train_loader.dataset)
+                avg_train_loss = total_train_loss / dataset_size
+                avg_physics_loss = total_physics_loss / dataset_size
+                avg_data_loss = total_data_loss / dataset_size
                 
-                self.optimizer.step()
+                # Validation
+                avg_val_loss = self.evaluate(self.val_loader)
                 
-                # Accumulate losses
-                batch_size = t.size(0)
-                total_train_loss += loss.item() * batch_size
-                total_physics_loss += loss_dict["physics_loss"] * batch_size
-                total_data_loss += loss_dict["data_loss"] * batch_size
-            
-            # Compute epoch averages
-            dataset_size = len(self.train_loader.dataset)
-            avg_train_loss = total_train_loss / dataset_size
-            avg_physics_loss = total_physics_loss / dataset_size
-            avg_data_loss = total_data_loss / dataset_size
-            
-            # Validation
-            avg_val_loss = self.evaluate(self.val_loader)
-            
-            # Logging
-            log_dict = {
-                "epoch": epoch + 1,
-                "train_loss": avg_train_loss,
-                "val_loss": avg_val_loss,
-                "physics_loss": avg_physics_loss,
-                "data_loss": avg_data_loss
-            }
-            writer.writerow(log_dict)
-            csv_file.flush()
-            
-            tb.add_scalar("Loss/Train", avg_train_loss, epoch + 1)
-            tb.add_scalar("Loss/Val", avg_val_loss, epoch + 1)
-            tb.add_scalar("Loss/Physics", avg_physics_loss, epoch + 1)
-            tb.add_scalar("Loss/Data", avg_data_loss, epoch + 1)
-            
-            if (epoch + 1) % 10 == 0:
-                print(f"Epoch {epoch+1}/{self.config.epochs} - "
-                      f"Train: {avg_train_loss:.6f}, Val: {avg_val_loss:.6f}")
-            
-            if self.scheduler:
-                self.scheduler.step()
+                # Logging
+                log_dict = {
+                    "epoch": epoch + 1,
+                    "train_loss": avg_train_loss,
+                    "val_loss": avg_val_loss,
+                    "physics_loss": avg_physics_loss,
+                    "data_loss": avg_data_loss
+                }
+                writer.writerow(log_dict)
+                csv_file.flush()
+                
+                tb.add_scalar("Loss/Train", avg_train_loss, epoch + 1)
+                tb.add_scalar("Loss/Val", avg_val_loss, epoch + 1)
+                tb.add_scalar("Loss/Physics", avg_physics_loss, epoch + 1)
+                tb.add_scalar("Loss/Data", avg_data_loss, epoch + 1)
+                
+                if (epoch + 1) % 10 == 0:
+                    print(f"Epoch {epoch+1}/{self.config.epochs} - "
+                        f"Train: {avg_train_loss:.6f}, Val: {avg_val_loss:.6f}, "
+                        f"Physics: {avg_physics_loss:.6f}, Data: {avg_data_loss:.6f}")
+                
+                # Early stopping check
+                if self._check_early_stopping(avg_val_loss, epoch):
+                    print(f"Early stopping triggered at epoch {epoch + 1}")
+                    break
+                
+                if self.scheduler:
+                    self.scheduler.step()
         
-        csv_file.close()
-        tb.close()
-        print(f"Training complete. Logs saved to {run_dir}")
+        except KeyboardInterrupt:
+            print(f"\nTraining interrupted at epoch {epoch + 1}")
+            print("Saving current model state...")
+            save_checkpoint(self.model, self.optimizer, self.config, run_dir, epoch + 1)
+        
+        finally:
+            csv_file.close()
+            tb.close()
+            print(f"Training complete. Logs saved to {run_dir}")
+            if self.best_model_path and os.path.exists(self.best_model_path):
+                print(f"Best model saved at: {self.best_model_path}")
+    
+    def _check_early_stopping(self, val_loss, epoch):
+        """
+            Check if early stopping criteria is met.
+            Returns True if training should stop.
+        """
+        if not hasattr(self.config, 'early_stopping_patience') or self.config.early_stopping_patience is None:
+            # If early stopping not configured, just save best model
+            if val_loss < self.best_val_loss:
+                self.best_val_loss = val_loss
+                # Note: save_checkpoint saves to run_dir/checkpoints/best_model.pth
+                save_checkpoint(self.model, self.optimizer, self.config, 
+                               os.path.dirname(self.best_model_path), epoch + 1, is_best=True)
+                print(f"  → New best model saved (val_loss: {val_loss:.6f})")
+            return False
+        
+        if val_loss < self.best_val_loss:
+            self.best_val_loss = val_loss
+            self.patience_counter = 0
+            save_checkpoint(self.model, self.optimizer, self.config, 
+                           os.path.dirname(self.best_model_path), epoch + 1, is_best=True)
+            print(f"  → New best model saved (val_loss: {val_loss:.6f})")
+        else:
+            self.patience_counter += 1
+            print(f"  → No improvement. Patience: {self.patience_counter}/{self.config.early_stopping_patience}")
+        
+        return self.patience_counter >= self.config.early_stopping_patience
 
     def evaluate(self, val_loader):
         """

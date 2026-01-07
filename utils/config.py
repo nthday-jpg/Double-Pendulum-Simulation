@@ -63,6 +63,9 @@ class Config:
     save_checkpoints: bool = True
     checkpoint_interval: int = 50
     
+    # early stopping
+    early_stopping_patience: int | None = None  # None = disabled, or number of epochs
+    
     # Physical parameters (for double pendulum)
     m1: float = 1.0
     m2: float = 1.0
