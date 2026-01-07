@@ -1,4 +1,7 @@
 import sympy as sp
+import numpy as np
+from scipy.integrate import solve_ivp
+from functools import lru_cache
 
 
 def derive_double_pendulum_dynamics():
@@ -79,8 +82,63 @@ def derive_double_pendulum_dynamics():
 
     return M, rest, symbols
 
+@lru_cache(maxsize=1)
+def build_numpy_functions():
+    """
+    Build lambdified functions for M(q) and C(q, qdot) using NumPy.
+    Used for fast numerical simulation with scipy.integrate.
+    """
+    print("Deriving equations symbolically (this may take a moment)...")
+    M_sym, C_sym, sym = derive_double_pendulum_dynamics()
+    
+    th1, th2 = sym["theta1"], sym["theta2"]
+    th1_d, th2_d = sym["theta1_dot"], sym["theta2_dot"]
+    m1, m2, l1, l2, g = sym["parameters"]
+    
+    # Lambdify for NumPy
+    M_func = sp.lambdify(
+        (th1, th2, m1, m2, l1, l2),
+        M_sym,
+        modules=numpy
+    )
+    
+    C_func = sp.lambdify(
+        (th1, th2, th1_d, th2_d, m1, m2, l1, l2, g),
+        C_sym,
+        modules=numpy
+    )
+    
+    print("Symbolic derivation complete!")
+    return M_func, C_func
 
-def build_physics_functions():
+
+def double_pendulum_derivatives(t, y, m1, m2, l1, l2, g):
+    """
+    Compute derivatives for double pendulum system using derived equations.
+    
+    State vector y = [theta1, theta2, omega1, omega2]
+    Returns: dy/dt = [omega1, omega2, gamma1, gamma2]
+    
+    Solves: M(q) * qdd + C(q, qdot) = 0  =>  qdd = -M^(-1) * C
+    """
+    theta1, theta2, omega1, omega2 = y
+    
+    # Get the numerical functions (cached)
+    M_func, C_func = build_numpy_functions()
+    
+    # Evaluate M and C at current state
+    M = np.array(M_func(theta1, theta2, m1, m2, l1, l2), dtype=float)
+    C = np.array(C_func(theta1, theta2, omega1, omega2, m1, m2, l1, l2, g), dtype=float).flatten()
+    
+    # Solve M*qdd + C = 0  =>  qdd = -M^(-1) * C
+    qdd = -np.linalg.solve(M, C)
+    
+    gamma1, gamma2 = qdd
+    
+    return [omega1, omega2, gamma1, gamma2]
+
+@lru_cache(maxsize=1)
+def build_torch_functions():
     """
     Build lambdified functions for M(q) and C(q, qdot).
     Returns M_fn, C_fn that work with PyTorch tensors.
@@ -205,12 +263,13 @@ def build_physics_functions():
 
     return M_fn, C_fn
 
-M_fn, C_fn = None, None
+# Globals to hold the built functions
+_M_fn_torch, _C_fn_torch = None, None
 
 def _ensure_built():
-    global M_fn, C_fn
-    if M_fn is None:
-        M_fn, C_fn = build_physics_functions()
+    global _M_fn_torch, _C_fn_torch
+    if _M_fn_torch is None:
+        _M_fn_torch, _C_fn_torch = build_torch_functions()
 
 def get_M_fn():
     _ensure_built()
