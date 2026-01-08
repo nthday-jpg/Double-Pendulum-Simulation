@@ -1,10 +1,11 @@
 # config.py
 from dataclasses import dataclass, field
+from datetime import datetime
 
 @dataclass
 class Config:
     # experiment
-    run_name: str
+    run_name: str = field(default_factory=lambda: f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
     seed: int = 0
 
     # data

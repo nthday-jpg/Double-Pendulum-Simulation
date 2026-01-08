@@ -42,9 +42,13 @@ class Trainer:
         self.run_dir = run_dir
         self.best_model_path = os.path.join(run_dir, "checkpoints", "best_model.pth")
         epoch = 0  # Initialize to avoid unbound variable
-        print( f"Starting training for {self.config.epochs} epochs...")
-        print( f"Device: {self.device}")
-        print( f"Using Accelerator with mixed precision: {self.accelerator.mixed_precision}")
+        
+        print("="*60, flush=True)
+        print(f"Starting training for {self.config.epochs} epochs...", flush=True)
+        print(f"Device: {self.device}", flush=True)
+        print(f"Using Accelerator with mixed precision: {self.accelerator.mixed_precision}", flush=True)
+        print("="*60, flush=True)
+        
         try: 
             for epoch in range(self.config.epochs):
                 self.model.train()
