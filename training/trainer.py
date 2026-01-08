@@ -259,10 +259,10 @@ class Trainer:
         total_val_loss = 0.0
         
         for batch in val_loader:
-            t, state = batch
+            t, state, point_type = batch  # Changed from t, state = batch
             t = t.to(self.device).view(-1, 1)
             state = state.to(self.device)
-            point_type = torch.zeros(t.size(0), dtype=torch.long, device=self.device)
+            point_type = point_type.to(self.device)
             t = t.detach().requires_grad_(True)
 
             with torch.enable_grad():
