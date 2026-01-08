@@ -185,14 +185,12 @@ class Trainer:
             # Create dummy point_type for validation (all data points)
             point_type = torch.zeros(t.size(0), dtype=torch.long, device=t.device)
             
-            # Don't use torch.no_grad() because we need gradients for physics loss
-            with torch.no_grad():
-                # Only disable gradients for model parameters
-                loss, _ = compute_loss(
-                    self.model, (t, state, point_type),
-                    weight_data=self.config.data_weight,
-                    weight_phys=self.config.physics_weight
-                )
+            # Compute loss (gradients needed for physics loss)
+            loss, _ = compute_loss(
+                self.model, (t, state, point_type),
+                weight_data=self.config.data_weight,
+                weight_phys=self.config.physics_weight
+            )
             total_val_loss += loss.item() * t.size(0)
         
         avg_val_loss = total_val_loss / len(val_loader.dataset)
