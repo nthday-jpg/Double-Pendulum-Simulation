@@ -34,27 +34,27 @@ class Trainer:
         self.best_model_path = None
         self.patience_counter = 0
         
-        # Load checkpoint if specified
+        # Load checkpoint if specified (for resuming training)
         if config.checkpoint_path and os.path.exists(config.checkpoint_path):
-            self._load_checkpoint(config.checkpoint_path)
+            self._resume_from_checkpoint(config.checkpoint_path)
 
-    def _load_checkpoint(self, checkpoint_path):
-        """Load model and optimizer state from checkpoint."""
-        print(f"Loading checkpoint from: {checkpoint_path}")
+    def _resume_from_checkpoint(self, checkpoint_path):
+        """Resume training from checkpoint (loads model + optimizer state)."""
+        print(f"Resuming training from checkpoint: {checkpoint_path}")
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
         
         # Load model state
         unwrapped_model = self.accelerator.unwrap_model(self.model)
         unwrapped_model.load_state_dict(checkpoint['model_state_dict'])
         
-        # Load optimizer state
+        # Load optimizer state (important for resuming training)
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         
-        # Optionally restore best val loss if continuing training
+        # Restore training state
         if 'best_val_loss' in checkpoint:
             self.best_val_loss = checkpoint['best_val_loss']
         
-        print(f"Checkpoint loaded successfully (epoch {checkpoint.get('epoch', 'unknown')})")
+        print(f"✓ Resumed from epoch {checkpoint.get('epoch', 'unknown')}, best_val_loss: {self.best_val_loss:.6f}")
 
     def train(self):
         """
