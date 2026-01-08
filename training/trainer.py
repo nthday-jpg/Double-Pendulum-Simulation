@@ -180,15 +180,16 @@ class Trainer:
         for batch in val_loader:
             t, state = batch  # Val loader only returns (t, state)
             
+            # Detach to create fresh tensors (compute_loss will set requires_grad)
+            t = t.detach().clone()
+            state = state.detach().clone()
+            
             # Create dummy point_type for validation (all data points)
             point_type = torch.zeros(t.size(0), dtype=torch.long, device=t.device)
             
-            # Enable gradients for physics loss computation, but don't update model
-            with torch.set_grad_enabled(True):
-                # Enable gradients for time (needed for physics loss)
-                t = t.requires_grad_(True)
-                
-                # Compute loss (gradients needed for physics loss)
+            # Enable gradients for physics loss computation
+            with torch.enable_grad():
+                # Compute loss (compute_loss will handle requires_grad for t)
                 loss, _ = compute_loss(
                     self.model, (t, state, point_type),
                     weight_data=self.config.data_weight,
