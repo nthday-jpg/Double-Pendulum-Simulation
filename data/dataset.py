@@ -116,4 +116,5 @@ def get_dataloader(data_path, parameters_path, config: Config,
     )
     
     print(f"DataLoaders: data_bs={batch_size}, colloc_bs={batch_size_collocation}, workers={num_workers}")
+    print(f"Dataset splits: train={train_size}, val={val_size}")
     return data_loader, collocation_loader, val_loader

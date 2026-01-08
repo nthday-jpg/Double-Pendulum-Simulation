@@ -130,7 +130,8 @@ class Trainer:
                 self.accelerator.wait_for_everyone()
                 
                 # Validation
-                avg_val_loss = self.evaluate(self.val_loader)
+                val_metrics = self.evaluate(self.val_loader, prefix="val")
+                avg_val_loss = val_metrics["total_loss"]
                 
                 # Synchronize after validation
                 self.accelerator.wait_for_everyone()
@@ -142,23 +143,27 @@ class Trainer:
                         log_dict = {
                             "epoch": epoch + 1,
                             "train_loss": avg_train_loss,
+                            "train_physics": avg_physics_loss,
+                            "train_data": avg_data_loss,
                             "val_loss": avg_val_loss,
-                            "physics_loss": avg_physics_loss,
-                            "data_loss": avg_data_loss
+                            "val_physics": val_metrics["physics_loss"],
+                            "val_data": val_metrics["data_loss"]
                         }
+                        
                         writer.writerow(log_dict)
                         csv_file.flush()
                         
                         tb.add_scalar("Loss/Train", avg_train_loss, epoch + 1)
+                        tb.add_scalar("Loss/Train_Physics", avg_physics_loss, epoch + 1)
+                        tb.add_scalar("Loss/Train_Data", avg_data_loss, epoch + 1)
                         tb.add_scalar("Loss/Val", avg_val_loss, epoch + 1)
-                        tb.add_scalar("Loss/Physics", avg_physics_loss, epoch + 1)
-                        tb.add_scalar("Loss/Data", avg_data_loss, epoch + 1)
+                        tb.add_scalar("Loss/Val_Physics", val_metrics["physics_loss"], epoch + 1)
+                        tb.add_scalar("Loss/Val_Data", val_metrics["data_loss"], epoch + 1)
                     
                     print_interval = getattr(self.config, 'print_interval', 10)
                     if (epoch + 1) % print_interval == 0 or epoch == 0:
-                        print(f"Epoch {epoch+1}/{self.config.epochs} - "
-                            f"Train: {avg_train_loss:.6f}, Val: {avg_val_loss:.6f}, "
-                            f"Physics: {avg_physics_loss:.6f}, Data: {avg_data_loss:.6f}")
+                        self._print_beautiful_log(epoch + 1, avg_train_loss, avg_physics_loss, avg_data_loss,
+                                                 val_metrics)
                 
                 # Synchronize before early stopping check
                 self.accelerator.wait_for_everyone()
@@ -266,42 +271,75 @@ class Trainer:
         
         return self.patience_counter >= self.config.early_stopping_patience
 
-    def evaluate(self, val_loader):
-        """Evaluate the model on validation dataset."""
+    def evaluate(self, val_loader, prefix="val"):
+        """Evaluate the model on validation/test dataset with detailed metrics."""
         unwrapped_model = self.accelerator.unwrap_model(self.model)
         unwrapped_model.eval()
         
-        total_val_loss = 0.0
+        total_loss = 0.0
+        total_physics_loss = 0.0
+        total_data_loss = 0.0
         total_samples = 0
         
         for batch in val_loader:
-            t, state, point_type = batch  # Changed from t, state = batch
+            t, state, point_type = batch
             t = t.to(self.device).view(-1, 1)
             state = state.to(self.device)
             t = t.detach().requires_grad_(True)
 
             with torch.enable_grad():
                 with self.accelerator.autocast():
-                    loss, _ = compute_loss(
+                    loss, loss_dict = compute_loss(
                         unwrapped_model, (t, state, point_type),
                         weight_data=self.config.data_weight,
                         weight_phys=self.config.physics_weight
                     )
             
             batch_size = t.size(0)
-            total_val_loss += loss.item() * batch_size
+            total_loss += loss.item() * batch_size
+            total_physics_loss += loss_dict["physics_loss"] * batch_size
+            total_data_loss += loss_dict["data_loss"] * batch_size
             total_samples += batch_size
         
         # Gather losses from all processes
-        total_val_loss = torch.tensor(total_val_loss, device=self.device)
+        total_loss = torch.tensor(total_loss, device=self.device)
+        total_physics_loss = torch.tensor(total_physics_loss, device=self.device)
+        total_data_loss = torch.tensor(total_data_loss, device=self.device)
         total_samples = torch.tensor(total_samples, device=self.device)
         
-        total_val_loss = self.accelerator.gather(total_val_loss).sum().item()
+        total_loss = self.accelerator.gather(total_loss).sum().item()
+        total_physics_loss = self.accelerator.gather(total_physics_loss).sum().item()
+        total_data_loss = self.accelerator.gather(total_data_loss).sum().item()
         total_samples = self.accelerator.gather(total_samples).sum().item()
         
-        avg_val_loss = total_val_loss / total_samples if total_samples > 0 else 0.0
-        return avg_val_loss
+        avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
+        avg_physics = total_physics_loss / total_samples if total_samples > 0 else 0.0
+        avg_data = total_data_loss / total_samples if total_samples > 0 else 0.0
+        
+        return {
+            "total_loss": avg_loss,
+            "physics_loss": avg_physics,
+            "data_loss": avg_data
+        }
 
+    def _print_beautiful_log(self, epoch, train_loss, train_physics, train_data, val_metrics):
+        """Print beautifully formatted training logs."""
+        print("\n" + "="*80)
+        print(f"{'Epoch':<15} {epoch}/{self.config.epochs}")
+        print("="*80)
+        
+        # Header
+        print(f"{'Dataset':<15} {'Total Loss':<15} {'Physics Loss':<15} {'Data Loss':<15}")
+        print("-"*80)
+        
+        # Training
+        print(f"{'Train':<15} {train_loss:<15.6f} {train_physics:<15.6f} {train_data:<15.6f}")
+        
+        # Validation
+        print(f"{'Validation':<15} {val_metrics['total_loss']:<15.6f} {val_metrics['physics_loss']:<15.6f} {val_metrics['data_loss']:<15.6f}")
+        
+        print("="*80 + "\n")
+    
     def plot_losses(self, run_dir):
         """Plot training and validation losses."""
         metrics_file = os.path.join(run_dir, "metrics.csv")
