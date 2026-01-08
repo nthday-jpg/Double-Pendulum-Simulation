@@ -189,7 +189,6 @@ def run_inference(checkpoint_path, initial_state=None, t_span=(0, 10), num_point
     
     # Default initial state
     if initial_state is None:
-        np.random.seed(42)
         initial_state = [
             np.random.uniform(-np.pi/4, np.pi/4),  # theta1
             np.random.uniform(-np.pi/4, np.pi/4),  # theta2

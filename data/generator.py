@@ -59,7 +59,6 @@ def generate_dataset(
     vary_parameters=False,
     num_points=1000,
     t_span=(0, 10),
-    random_seed=42,
     check_energy=True
 ):
     """Generate multiple trajectories with random initial conditions.
@@ -75,10 +74,8 @@ def generate_dataset(
                         for each trajectory within reasonable ranges
         num_points: Number of time points per trajectory
         t_span: Time span (t_start, t_end)
-        random_seed: Random seed for reproducibility
         check_energy: Whether to check energy conservation
     """
-    np.random.seed(random_seed)
     os.makedirs(output_dir, exist_ok=True)
     
     # Default parameters

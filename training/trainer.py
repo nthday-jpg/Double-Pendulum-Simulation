@@ -100,8 +100,6 @@ class Trainer:
                 batch_count = 0
                 for data_batch in data_iter:
                     batch_count += 1
-                    if self.accelerator.is_main_process and batch_count % 10 == 0:
-                        print(f"  Processing data batch {batch_count}...", flush=True)
                     
                     total_train_loss, total_physics_loss, total_data_loss, total_samples = self._train_step(
                         data_batch, total_train_loss, total_physics_loss, total_data_loss, total_samples
