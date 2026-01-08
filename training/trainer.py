@@ -59,7 +59,7 @@ class Trainer:
                 for batch in self.train_loader:
                     t, state, point_type = batch
                     # Accelerator handles device placement automatically
-                    t = t.requires_grad_(True)
+                    # No need to call requires_grad here, compute_loss handles it
                     
                     self.optimizer.zero_grad()
                     loss, loss_dict = compute_loss(
@@ -173,25 +173,28 @@ class Trainer:
     def evaluate(self, val_loader):
         """
             Evaluate the model on validation dataset.
+            PINNs require gradient graph even in validation for physics loss.
         """
-        self.model.eval()
+        # Use unwrapped model to bypass accelerator's inference optimizations
+        unwrapped_model = self.accelerator.unwrap_model(self.model)
+        unwrapped_model.eval()  # Still use eval mode for Dropout/BatchNorm
+        
         total_val_loss = 0.0
         
         for batch in val_loader:
             t, state = batch  # Val loader only returns (t, state)
             
-            # Ensure tensors are on correct device and detached
-            t = t.to(self.device).detach()
-            state = state.to(self.device).detach()
-            
-            # Create dummy point_type for validation (all data points)
+            # Prepare tensors
+            t = t.to(self.device).view(-1, 1)
+            state = state.to(self.device)
             point_type = torch.zeros(t.size(0), dtype=torch.long, device=self.device)
             
-            # Enable gradients AND use autocast to match training environment
+            # Enable gradients for physics loss computation
             with torch.enable_grad():
                 with self.accelerator.autocast():
+                    # Pass unwrapped model to compute_loss
                     loss, _ = compute_loss(
-                        self.model, (t, state, point_type),
+                        unwrapped_model, (t, state, point_type),
                         weight_data=self.config.data_weight,
                         weight_phys=self.config.physics_weight
                     )
