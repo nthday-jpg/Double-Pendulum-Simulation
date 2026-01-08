@@ -168,7 +168,8 @@ class Trainer:
                 if self.scheduler:
                     self.scheduler.step()
         
-        exceif self.accelerator.is_main_process:
+        except:
+            if self.accelerator.is_main_process:
                 print(f"\nTraining interrupted at epoch {epoch + 1}")
                 print("Saving current model state...")
                 unwrapped_model = self.accelerator.unwrap_model(self.model)
@@ -186,8 +187,7 @@ class Trainer:
                 
                 # Plot losses
                 if hasattr(self, 'run_dir') and self.run_dir:
-                if hasattr(self, 'run_dir'):
-                self.plot_losses(self.run_dir)
+                    self.plot_losses(self.run_dir)
     
     def _check_early_stopping(self, val_loss, epoch):
         """
@@ -204,21 +204,21 @@ class Trainer:
                 print(f"  → New best model saved (val_loss: {val_loss:.6f})")
         return False
     
-    if val_loss < self.best_val_loss:
-        self.best_val_loss = val_loss
-        self.patience_counter = 0
-        # Only main process saves checkpoints
-        if self.accelerator.is_main_process and self.best_model_path and hasattr(self, 'run_dir') and self.run_dir:
-            if self.best_model_path and hasattr(self, 'run_dir'):
-                # Unwrap model for saving
-                unwrapped_model = self.accelerator.unwrap_model(self.model)
-                save_checkpoint(unwrapped_model, self.optimizer, self.config, 
-                               self.run_dir, epoch + 1, is_best=True)
-                print(f"  → New best model saved (val_loss: {val_loss:.6f})")
-        else:
-            self.patience_counter += 1
-        
-        return self.patience_counter >= self.config.early_stopping_patience
+        if val_loss < self.best_val_loss:
+            self.best_val_loss = val_loss
+            self.patience_counter = 0
+            # Only main process saves checkpoints
+            if self.accelerator.is_main_process and self.best_model_path and hasattr(self, 'run_dir') and self.run_dir:
+                if self.best_model_path and hasattr(self, 'run_dir'):
+                    # Unwrap model for saving
+                    unwrapped_model = self.accelerator.unwrap_model(self.model)
+                    save_checkpoint(unwrapped_model, self.optimizer, self.config, 
+                                self.run_dir, epoch + 1, is_best=True)
+                    print(f"  → New best model saved (val_loss: {val_loss:.6f})")
+            else:
+                self.patience_counter += 1
+            
+            return self.patience_counter >= self.config.early_stopping_patience
 
     def evaluate(self, val_loader):
         """
