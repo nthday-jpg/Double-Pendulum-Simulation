@@ -189,6 +189,8 @@ class Trainer:
             state = state.to(self.device)
             point_type = torch.zeros(t.size(0), dtype=torch.long, device=self.device)
             
+            t = t.detach().requires_grad_(True)
+
             # Enable gradients for physics loss computation
             with torch.enable_grad():
                 with self.accelerator.autocast():
