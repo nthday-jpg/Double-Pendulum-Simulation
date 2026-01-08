@@ -5,11 +5,36 @@ from pathlib import Path
 import matplotlib.animation as animation
 
 
-def load_parameters(params_file):
-    """Load physical parameters from JSON file."""
-    with open(params_file, 'r') as f:
-        params = json.load(f)
-    return params
+def load_parameters(params_file, traj_idx=None):
+    """Load physical parameters from JSON file.
+    
+    Args:
+        params_file: Path to parameters file or directory containing parameter files
+        traj_idx: Trajectory index. If provided, looks for parameters_{traj_idx:03d}.json
+                 If None, looks for parameters.json (legacy format)
+    """
+    params_path = Path(params_file)
+    
+    if params_path.is_dir():
+        # If a directory is provided
+        if traj_idx is not None:
+            # Try trajectory-specific parameter file
+            traj_params_file = params_path / f'parameters_{traj_idx:03d}.json'
+            if traj_params_file.exists():
+                with open(traj_params_file, 'r') as f:
+                    return json.load(f)
+        
+        # Fall back to legacy parameters.json
+        legacy_params_file = params_path / 'parameters.json'
+        if legacy_params_file.exists():
+            with open(legacy_params_file, 'r') as f:
+                return json.load(f)
+        
+        raise FileNotFoundError(f"No parameter file found in {params_path}")
+    else:
+        # Direct file path provided
+        with open(params_file, 'r') as f:
+            return json.load(f)
 
 
 def load_trajectory(traj_file):
@@ -37,8 +62,8 @@ def plot_trajectories(data_dir='data/raw'):
     """Plot all trajectories over time."""
     data_path = Path(data_dir)
     
-    # Load parameters
-    params = load_parameters(data_path / 'parameters.json')
+    # Load parameters (will use legacy parameters.json if available)
+    params = load_parameters(data_path)
     l1, l2 = params['l1'], params['l2']
     
     # Find all trajectory files
@@ -54,7 +79,7 @@ def plot_trajectories(data_dir='data/raw'):
     fig, axes = plt.subplots(3, 2, figsize=(15, 12))
     fig.suptitle('Double Pendulum Trajectories vs Time', fontsize=16)
     
-    colors = plt.cm.viridis(np.linspace(0, 1, len(traj_files)))
+    colors = plt.cm.viridis(np.linspace(0, 1, len(traj_files))) # type: ignore
     
     for idx, traj_file in enumerate(traj_files):
         t, q, qdot = load_trajectory(traj_file)
@@ -134,8 +159,8 @@ def animate_trajectory(traj_idx=0, data_dir='data/raw', save_format='gif', frame
     """
     data_path = Path(data_dir)
     
-    # Load parameters and trajectory
-    params = load_parameters(data_path / 'parameters.json')
+    # Load parameters for this specific trajectory
+    params = load_parameters(data_path, traj_idx=traj_idx)
     l1, l2 = params['l1'], params['l2']
     
     traj_file = data_path / f'trajectory_{traj_idx:03d}.npz'
