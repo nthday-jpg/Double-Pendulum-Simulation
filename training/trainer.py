@@ -179,18 +179,21 @@ class Trainer:
         
         for batch in val_loader:
             t, state = batch  # Val loader only returns (t, state)
-            # Enable gradients for time (needed for physics loss)
-            t = t.requires_grad_(True)
             
             # Create dummy point_type for validation (all data points)
             point_type = torch.zeros(t.size(0), dtype=torch.long, device=t.device)
             
-            # Compute loss (gradients needed for physics loss)
-            loss, _ = compute_loss(
-                self.model, (t, state, point_type),
-                weight_data=self.config.data_weight,
-                weight_phys=self.config.physics_weight
-            )
+            # Enable gradients for physics loss computation, but don't update model
+            with torch.set_grad_enabled(True):
+                # Enable gradients for time (needed for physics loss)
+                t = t.requires_grad_(True)
+                
+                # Compute loss (gradients needed for physics loss)
+                loss, _ = compute_loss(
+                    self.model, (t, state, point_type),
+                    weight_data=self.config.data_weight,
+                    weight_phys=self.config.physics_weight
+                )
             total_val_loss += loss.item() * t.size(0)
         
         avg_val_loss = total_val_loss / len(val_loader.dataset)
