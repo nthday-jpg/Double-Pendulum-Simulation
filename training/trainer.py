@@ -33,6 +33,28 @@ class Trainer:
         self.best_val_loss = float('inf')
         self.best_model_path = None
         self.patience_counter = 0
+        
+        # Load checkpoint if specified
+        if config.checkpoint_path and os.path.exists(config.checkpoint_path):
+            self._load_checkpoint(config.checkpoint_path)
+
+    def _load_checkpoint(self, checkpoint_path):
+        """Load model and optimizer state from checkpoint."""
+        print(f"Loading checkpoint from: {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        
+        # Load model state
+        unwrapped_model = self.accelerator.unwrap_model(self.model)
+        unwrapped_model.load_state_dict(checkpoint['model_state_dict'])
+        
+        # Load optimizer state
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        
+        # Optionally restore best val loss if continuing training
+        if 'best_val_loss' in checkpoint:
+            self.best_val_loss = checkpoint['best_val_loss']
+        
+        print(f"Checkpoint loaded successfully (epoch {checkpoint.get('epoch', 'unknown')})")
 
     def train(self):
         """
@@ -166,7 +188,6 @@ class Trainer:
                 print(f"  → New best model saved (val_loss: {val_loss:.6f})")
         else:
             self.patience_counter += 1
-            print(f"  → No improvement. Patience: {self.patience_counter}/{self.config.early_stopping_patience}")
         
         return self.patience_counter >= self.config.early_stopping_patience
 

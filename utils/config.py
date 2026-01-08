@@ -47,7 +47,7 @@ class Config:
     gradient_accumulation_steps: int = 1  # Gradient accumulation for larger effective batch size
     
     # model loading
-    model_dir: str | None = None  # Path to checkpoint directory for loading pretrained model
+    checkpoint_path: str | None = None  # Path to checkpoint file (.pth) for resuming training or transfer learning
     
     # regularization
     l1_lambda: float = 0.0
