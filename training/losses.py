@@ -3,8 +3,13 @@ from physics.physics_loss import physics_residual, compute_derivatives
 
 def compute_loss(model, batch, weight_data=1.0, weight_phys=1.0):
     t, state, point_type = batch
-    t = t.view(-1, 1)
-    t.requires_grad_(True)
+    
+    # Ensure t is a 2D column vector
+    if t.ndim == 1:
+        t = t.view(-1, 1)
+    
+    # Crucial: set requires_grad on a leaf tensor before the forward pass
+    t = t.detach().requires_grad_(True)
 
     q_pred = model(t)  # (N, 2)
 

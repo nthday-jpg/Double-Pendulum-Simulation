@@ -180,21 +180,21 @@ class Trainer:
         for batch in val_loader:
             t, state = batch  # Val loader only returns (t, state)
             
-            # Detach to create fresh tensors (compute_loss will set requires_grad)
-            t = t.detach().clone()
-            state = state.detach().clone()
+            # Ensure tensors are on correct device and detached
+            t = t.to(self.device).detach()
+            state = state.to(self.device).detach()
             
             # Create dummy point_type for validation (all data points)
-            point_type = torch.zeros(t.size(0), dtype=torch.long, device=t.device)
+            point_type = torch.zeros(t.size(0), dtype=torch.long, device=self.device)
             
-            # Enable gradients for physics loss computation
+            # Enable gradients AND use autocast to match training environment
             with torch.enable_grad():
-                # Compute loss (compute_loss will handle requires_grad for t)
-                loss, _ = compute_loss(
-                    self.model, (t, state, point_type),
-                    weight_data=self.config.data_weight,
-                    weight_phys=self.config.physics_weight
-                )
+                with self.accelerator.autocast():
+                    loss, _ = compute_loss(
+                        self.model, (t, state, point_type),
+                        weight_data=self.config.data_weight,
+                        weight_phys=self.config.physics_weight
+                    )
             total_val_loss += loss.item() * t.size(0)
         
         avg_val_loss = total_val_loss / len(val_loader.dataset)
