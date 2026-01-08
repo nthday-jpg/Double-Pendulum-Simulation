@@ -1,7 +1,21 @@
 import sys
 import os
 import argparse
+import warnings
 import torch
+
+# Suppress warnings
+warnings.filterwarnings('ignore', category=UserWarning)
+warnings.filterwarnings('ignore', message='.*Grad strides do not match.*')
+warnings.filterwarnings('ignore', message='.*The hostname of the client socket.*')
+warnings.filterwarnings('ignore', message='.*UnsupportedFieldAttributeWarning.*')
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TensorFlow warnings
+
+# NCCL timeout settings (increase to 30 minutes for long operations)
+os.environ['NCCL_TIMEOUT'] = '1800'  # 30 minutes in seconds
+os.environ['NCCL_BLOCKING_WAIT'] = '1'
+os.environ['NCCL_ASYNC_ERROR_HANDLING'] = '1'
+os.environ['NCCL_DEBUG'] = 'WARN'  # Set to INFO for more debugging
 
 # Set up paths for Kaggle environment
 base_path = '/kaggle/working'
@@ -55,6 +69,8 @@ def parse_args():
                         help='Random seed')
     parser.add_argument('--checkpoint_path', type=str, default=None,
                         help='Path to checkpoint to resume from')
+    parser.add_argument('--data_fraction', type=float, default=0.1,
+                        help='Fraction of data to use for training')
     
     # Data paths
     parser.add_argument('--input_path', type=str, default='/kaggle/input/double-pendulum',
@@ -87,7 +103,8 @@ def main():
         batch_size_collocation=args.batch_size_collocation,
         use_compile=args.use_compile,
         seed=args.seed,
-        checkpoint_path=args.checkpoint_path
+        checkpoint_path=args.checkpoint_path,
+        data_fraction=args.data_fraction
     )
     
     # Override lr if provided

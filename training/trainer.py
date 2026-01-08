@@ -118,8 +118,14 @@ class Trainer:
                 avg_physics_loss = total_physics_loss / total_samples
                 avg_data_loss = total_data_loss / total_samples
                 
+                # Synchronize before validation
+                self.accelerator.wait_for_everyone()
+                
                 # Validation
                 avg_val_loss = self.evaluate(self.val_loader)
+                
+                # Synchronize after validation
+                self.accelerator.wait_for_everyone()
                 
                 # Logging - only main process
                 if self.accelerator.is_main_process:
@@ -145,6 +151,9 @@ class Trainer:
                         print(f"Epoch {epoch+1}/{self.config.epochs} - "
                             f"Train: {avg_train_loss:.6f}, Val: {avg_val_loss:.6f}, "
                             f"Physics: {avg_physics_loss:.6f}, Data: {avg_data_loss:.6f}")
+                
+                # Synchronize before early stopping check
+                self.accelerator.wait_for_everyone()
                 
                 # Early stopping check
                 if self._check_early_stopping(avg_val_loss, epoch):
@@ -255,6 +264,7 @@ class Trainer:
         unwrapped_model.eval()
         
         total_val_loss = 0.0
+        total_samples = 0
         
         for batch in val_loader:
             t, state, point_type = batch  # Changed from t, state = batch
@@ -269,9 +279,19 @@ class Trainer:
                         weight_data=self.config.data_weight,
                         weight_phys=self.config.physics_weight
                     )
-            total_val_loss += loss.item() * t.size(0)
+            
+            batch_size = t.size(0)
+            total_val_loss += loss.item() * batch_size
+            total_samples += batch_size
         
-        avg_val_loss = total_val_loss / len(val_loader.dataset)
+        # Gather losses from all processes
+        total_val_loss = torch.tensor(total_val_loss, device=self.device)
+        total_samples = torch.tensor(total_samples, device=self.device)
+        
+        total_val_loss = self.accelerator.gather(total_val_loss).sum().item()
+        total_samples = self.accelerator.gather(total_samples).sum().item()
+        
+        avg_val_loss = total_val_loss / total_samples if total_samples > 0 else 0.0
         return avg_val_loss
 
     def plot_losses(self, run_dir):
