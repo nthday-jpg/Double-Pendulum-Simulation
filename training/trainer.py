@@ -31,6 +31,7 @@ class Trainer:
             Training loop for the PINN model.
         """
         writer, csv_file, tb, run_dir = init_run(self.config)
+        self.run_dir = run_dir
         self.best_model_path = os.path.join(run_dir, "checkpoints", "best_model.pth")
         epoch = 0  # Initialize to avoid unbound variable
         
@@ -117,7 +118,8 @@ class Trainer:
                 print(f"Best model saved at: {self.best_model_path}")
             
             # Plot losses
-            self.plot_losses(run_dir)
+            if hasattr(self, 'run_dir'):
+                self.plot_losses(self.run_dir)
     
     def _check_early_stopping(self, val_loss, epoch):
         """
@@ -129,18 +131,18 @@ class Trainer:
             if val_loss < self.best_val_loss:
                 self.best_val_loss = val_loss
                 # Note: save_checkpoint saves to run_dir/checkpoints/best_model.pth
-                if self.best_model_path:
+                if self.best_model_path and hasattr(self, 'run_dir'):
                     save_checkpoint(self.model, self.optimizer, self.config, 
-                                   os.path.dirname(self.best_model_path), epoch + 1, is_best=True)
+                                   self.run_dir, epoch + 1, is_best=True)
                     print(f"  → New best model saved (val_loss: {val_loss:.6f})")
             return False
         
         if val_loss < self.best_val_loss:
             self.best_val_loss = val_loss
             self.patience_counter = 0
-            if self.best_model_path:
+            if self.best_model_path and hasattr(self, 'run_dir'):
                 save_checkpoint(self.model, self.optimizer, self.config, 
-                               os.path.dirname(self.best_model_path), epoch + 1, is_best=True)
+                               self.run_dir, epoch + 1, is_best=True)
                 print(f"  → New best model saved (val_loss: {val_loss:.6f})")
         else:
             self.patience_counter += 1
