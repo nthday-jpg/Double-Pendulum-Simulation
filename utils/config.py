@@ -35,7 +35,8 @@ class Config:
 
     # training
     lr: float = 1e-3
-    batch_size: int = 128
+    batch_size: int = 128  # Batch size for data points
+    batch_size_collocation: int | None = None  # Batch size for collocation points (None = same as batch_size)
     epochs: int = 500
     optimizer: str = "adam"  # adam | adamw | sgd
     weight_decay: float = 0.0
@@ -43,6 +44,7 @@ class Config:
     scheduler: str | None = None  # None | cosine | step
     
     # torch compile (PyTorch 2.0+)
+    # Note: Disabled for PINNs due to double backward incompatibility
     use_compile: bool = False  # Enable torch.compile() for speedup
     compile_mode: str = "default"  # default | reduce-overhead | max-autotune
     
