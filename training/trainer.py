@@ -97,7 +97,12 @@ class Trainer:
                 data_iter = iter(self.data_loader)
                 colloc_iter = itertools.cycle(self.collocation_loader)
                 
+                batch_count = 0
                 for data_batch in data_iter:
+                    batch_count += 1
+                    if self.accelerator.is_main_process and batch_count % 10 == 0:
+                        print(f"  Processing data batch {batch_count}...", flush=True)
+                    
                     total_train_loss, total_physics_loss, total_data_loss, total_samples = self._train_step(
                         data_batch, total_train_loss, total_physics_loss, total_data_loss, total_samples
                     )
@@ -153,18 +158,32 @@ class Trainer:
                     self.scheduler.step()
         
         except Exception as e:
+            # Log error to file for debugging
+            import traceback
+            error_msg = f"\n{'='*60}\n"
+            error_msg += f"ERROR at epoch {epoch + 1}\n"
+            error_msg += f"Process rank: {self.accelerator.process_index}\n"
+            error_msg += f"Error type: {type(e).__name__}\n"
+            error_msg += f"Error: {str(e)}\n"
+            error_msg += f"Traceback:\n{traceback.format_exc()}\n"
+            error_msg += f"{'='*60}\n"
+            
+            print(error_msg, flush=True)  # Print regardless of rank
+            
+            # Save to file
+            if hasattr(self, 'run_dir') and self.run_dir:
+                error_file = os.path.join(self.run_dir, f"error_rank_{self.accelerator.process_index}.txt")
+                with open(error_file, 'w') as f:
+                    f.write(error_msg)
+            
             if self.accelerator.is_main_process:
-                print(f"\n{'='*60}")
-                print(f"ERROR: Training interrupted at epoch {epoch + 1}")
-                print(f"Error type: {type(e).__name__}")
-                print(f"Error message: {str(e)}")
-                print(f"{'='*60}")
-                print("Saving current model state...")
+                print("Saving current model state...", flush=True)
                 try:
                     unwrapped_model = self.accelerator.unwrap_model(self.model)
                 except (KeyError, AttributeError):
                     unwrapped_model = self.model
-                save_checkpoint(unwrapped_model, self.optimizer, self.config, run_dir, epoch + 1)
+                if hasattr(self, 'run_dir') and self.run_dir:
+                    save_checkpoint(unwrapped_model, self.optimizer, self.config, run_dir, epoch + 1)
             raise  # Re-raise to see full traceback
         
         finally:
