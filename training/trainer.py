@@ -152,15 +152,20 @@ class Trainer:
                 if self.scheduler:
                     self.scheduler.step()
         
-        except:
+        except Exception as e:
             if self.accelerator.is_main_process:
-                print(f"\nTraining interrupted at epoch {epoch + 1}")
+                print(f"\n{'='*60}")
+                print(f"ERROR: Training interrupted at epoch {epoch + 1}")
+                print(f"Error type: {type(e).__name__}")
+                print(f"Error message: {str(e)}")
+                print(f"{'='*60}")
                 print("Saving current model state...")
                 try:
                     unwrapped_model = self.accelerator.unwrap_model(self.model)
                 except (KeyError, AttributeError):
                     unwrapped_model = self.model
                 save_checkpoint(unwrapped_model, self.optimizer, self.config, run_dir, epoch + 1)
+            raise  # Re-raise to see full traceback
         
         finally:
             if self.accelerator.is_main_process:
