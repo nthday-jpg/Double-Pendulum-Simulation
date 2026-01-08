@@ -2,6 +2,7 @@ from torch.utils.data import Dataset, DataLoader
 import torch
 import numpy as np
 import json
+import os
 from utils.config import Config
 
 class PendulumDataset(Dataset):
@@ -81,13 +82,20 @@ class MixedDataset(Dataset):
         
 def get_dataloader(data_path, parameters_path, 
                    config: Config,
-                   num_workers=1, shuffle=True,
+                   num_workers=None, shuffle=True,
                    val_split=0.2):
     """ 
         Data_fraction: Fraction of training samples per epoch that are data points. \\
         Ndata / (Ndata + Ncollocation) = data_fraction \\
         n_collocation: Number of collocation points to use 
     """
+    # Auto-detect optimal num_workers if not specified
+    if num_workers is None:
+        num_workers = min(4, os.cpu_count() or 1)
+        # On Windows, use 0 workers to avoid multiprocessing issues
+        if os.name == 'nt':
+            num_workers = 0
+    
     tmin = config.t_min
     tmax = config.t_max
     n_collocation = config.n_collocation
@@ -106,10 +114,12 @@ def get_dataloader(data_path, parameters_path,
 
     train_dataset = MixedDataset(train_data_dataset, collocation_dataset, data_fraction)
     train_loader = DataLoader(train_dataset, batch_size=batch_size,
-                              shuffle=shuffle, num_workers=num_workers)
+                              shuffle=shuffle, num_workers=num_workers,
+                              pin_memory=True if torch.cuda.is_available() else False)
     
     val_loader = DataLoader(val_data_dataset, batch_size=batch_size, 
-                            shuffle=False, num_workers=num_workers)
+                            shuffle=False, num_workers=num_workers,
+                            pin_memory=True if torch.cuda.is_available() else False)
 
-
+    print(f"DataLoader configured with num_workers={num_workers}, pin_memory={torch.cuda.is_available()}")
     return train_loader, val_loader

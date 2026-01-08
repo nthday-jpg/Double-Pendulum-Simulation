@@ -4,6 +4,7 @@ import os
 import csv
 import matplotlib.pyplot as plt
 import pandas as pd
+from accelerate import Accelerator
 from models.pinn import PINN
 from training.losses import compute_loss
 from utils.config import Config
@@ -13,14 +14,21 @@ class Trainer:
     def __init__(self, model: PINN, config: Config,
                  train_loader, val_loader,
                  optimizer, scheduler=None):
-        self.model = model
+        # Initialize Accelerator for automatic device placement and mixed precision
+        self.accelerator = Accelerator(
+            mixed_precision='fp16' if hasattr(config, 'mixed_precision') and config.mixed_precision else 'no',
+            gradient_accumulation_steps=getattr(config, 'gradient_accumulation_steps', 1)
+        )
+        
         self.config = config
-        self.train_loader = train_loader
-        self.val_loader = val_loader
-        self.optimizer = optimizer
+        
+        # Prepare model, optimizer, and dataloaders with accelerator
+        self.model, self.optimizer, self.train_loader, self.val_loader = self.accelerator.prepare(
+            model, optimizer, train_loader, val_loader
+        )
+        
         self.scheduler = scheduler
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model.to(self.device)
+        self.device = self.accelerator.device
 
         self.best_val_loss = float('inf')
         self.best_model_path = None
@@ -34,7 +42,9 @@ class Trainer:
         self.run_dir = run_dir
         self.best_model_path = os.path.join(run_dir, "checkpoints", "best_model.pth")
         epoch = 0  # Initialize to avoid unbound variable
-        
+        print( f"Starting training for {self.config.epochs} epochs...")
+        print( f"Device: {self.device}")
+        print( f"Using Accelerator with mixed precision: {self.accelerator.mixed_precision}")
         try: 
             for epoch in range(self.config.epochs):
                 self.model.train()
@@ -44,9 +54,8 @@ class Trainer:
                 
                 for batch in self.train_loader:
                     t, state, point_type = batch
-                    t = t.to(self.device).requires_grad_(True)
-                    state = state.to(self.device)
-                    point_type = point_type.to(self.device)
+                    # Accelerator handles device placement automatically
+                    t = t.requires_grad_(True)
                     
                     self.optimizer.zero_grad()
                     loss, loss_dict = compute_loss(
@@ -54,10 +63,12 @@ class Trainer:
                         weight_data=self.config.data_weight,
                         weight_phys=self.config.physics_weight
                     )
-                    loss.backward()
+                    
+                    # Use accelerator's backward for mixed precision
+                    self.accelerator.backward(loss)
                     
                     if self.config.grad_clip:
-                        nn.utils.clip_grad_norm_(self.model.parameters(), self.config.grad_clip)
+                        self.accelerator.clip_grad_norm_(self.model.parameters(), self.config.grad_clip)
                     
                     self.optimizer.step()
                     
@@ -108,7 +119,8 @@ class Trainer:
         except KeyboardInterrupt:
             print(f"\nTraining interrupted at epoch {epoch + 1}")
             print("Saving current model state...")
-            save_checkpoint(self.model, self.optimizer, self.config, run_dir, epoch + 1)
+            unwrapped_model = self.accelerator.unwrap_model(self.model)
+            save_checkpoint(unwrapped_model, self.optimizer, self.config, run_dir, epoch + 1)
         
         finally:
             csv_file.close()
@@ -132,7 +144,9 @@ class Trainer:
                 self.best_val_loss = val_loss
                 # Note: save_checkpoint saves to run_dir/checkpoints/best_model.pth
                 if self.best_model_path and hasattr(self, 'run_dir'):
-                    save_checkpoint(self.model, self.optimizer, self.config, 
+                    # Unwrap model for saving
+                    unwrapped_model = self.accelerator.unwrap_model(self.model)
+                    save_checkpoint(unwrapped_model, self.optimizer, self.config, 
                                    self.run_dir, epoch + 1, is_best=True)
                     print(f"  → New best model saved (val_loss: {val_loss:.6f})")
             return False
@@ -141,7 +155,9 @@ class Trainer:
             self.best_val_loss = val_loss
             self.patience_counter = 0
             if self.best_model_path and hasattr(self, 'run_dir'):
-                save_checkpoint(self.model, self.optimizer, self.config, 
+                # Unwrap model for saving
+                unwrapped_model = self.accelerator.unwrap_model(self.model)
+                save_checkpoint(unwrapped_model, self.optimizer, self.config, 
                                self.run_dir, epoch + 1, is_best=True)
                 print(f"  → New best model saved (val_loss: {val_loss:.6f})")
         else:
@@ -157,20 +173,20 @@ class Trainer:
         self.model.eval()
         total_val_loss = 0.0
         
-        for batch in val_loader:
-            t, state = batch  # Val loader only returns (t, state)
-            t = t.to(self.device)
-            state = state.to(self.device)
-            
-            # Create dummy point_type for validation (all data points)
-            point_type = torch.zeros(t.size(0), dtype=torch.long, device=self.device)
-            
-            loss, _ = compute_loss(
-                self.model, (t, state, point_type),
-                weight_data=self.config.data_weight,
-                weight_phys=self.config.physics_weight
-            )
-            total_val_loss += loss.item() * t.size(0)
+        with torch.no_grad():
+            for batch in val_loader:
+                t, state = batch  # Val loader only returns (t, state)
+                # Accelerator handles device placement automatically
+                
+                # Create dummy point_type for validation (all data points)
+                point_type = torch.zeros(t.size(0), dtype=torch.long, device=t.device)
+                
+                loss, _ = compute_loss(
+                    self.model, (t, state, point_type),
+                    weight_data=self.config.data_weight,
+                    weight_phys=self.config.physics_weight
+                )
+                total_val_loss += loss.item() * t.size(0)
         
         avg_val_loss = total_val_loss / len(val_loader.dataset)
         return avg_val_loss
@@ -208,9 +224,11 @@ class Trainer:
     
 
     def save_model(self, path):
-        torch.save(self.model.state_dict(), path)
+        unwrapped_model = self.accelerator.unwrap_model(self.model)
+        torch.save(unwrapped_model.state_dict(), path)
 
     def load_model(self, path):
-        self.model.load_state_dict(torch.load(path, map_location=self.device))
+        unwrapped_model = self.accelerator.unwrap_model(self.model)
+        unwrapped_model.load_state_dict(torch.load(path, map_location=self.device))
 
 

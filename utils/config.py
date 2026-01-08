@@ -37,6 +37,13 @@ class Config:
     grad_clip: float | None = None
     scheduler: str | None = None  # None | cosine | step
     
+    # accelerate
+    mixed_precision: bool = False  # Enable FP16 mixed precision training
+    gradient_accumulation_steps: int = 1  # Gradient accumulation for larger effective batch size
+    
+    # model loading
+    model_dir: str | None = None  # Path to checkpoint directory for loading pretrained model
+    
     # regularization
     l1_lambda: float = 0.0
     l2_lambda: float = 0.0  # alternative to weight_decay
