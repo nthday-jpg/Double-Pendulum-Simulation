@@ -71,7 +71,8 @@ class Config:
     rollout_dt: float = 0.01
 
     # logging
-    log_interval: int = 100
+    log_interval: int = 10  # Log metrics to CSV/TensorBoard every N epochs (1 = every epoch)
+    print_interval: int = 10  # Print progress to console every N epochs
     save_checkpoints: bool = True
     checkpoint_interval: int = 50
     

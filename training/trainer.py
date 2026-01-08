@@ -113,23 +113,27 @@ class Trainer:
                 # Validation
                 avg_val_loss = self.evaluate(self.val_loader)
                 
-                # Logging
-                log_dict = {
-                    "epoch": epoch + 1,
-                    "train_loss": avg_train_loss,
-                    "val_loss": avg_val_loss,
-                    "physics_loss": avg_physics_loss,
-                    "data_loss": avg_data_loss
-                }
-                writer.writerow(log_dict)
-                csv_file.flush()
+                # Logging (controlled by log_interval)
+                log_interval = getattr(self.config, 'log_interval', 1)  # Default to every epoch
+                if (epoch + 1) % log_interval == 0 or epoch == 0:
+                    log_dict = {
+                        "epoch": epoch + 1,
+                        "train_loss": avg_train_loss,
+                        "val_loss": avg_val_loss,
+                        "physics_loss": avg_physics_loss,
+                        "data_loss": avg_data_loss
+                    }
+                    writer.writerow(log_dict)
+                    csv_file.flush()
+                    
+                    tb.add_scalar("Loss/Train", avg_train_loss, epoch + 1)
+                    tb.add_scalar("Loss/Val", avg_val_loss, epoch + 1)
+                    tb.add_scalar("Loss/Physics", avg_physics_loss, epoch + 1)
+                    tb.add_scalar("Loss/Data", avg_data_loss, epoch + 1)
                 
-                tb.add_scalar("Loss/Train", avg_train_loss, epoch + 1)
-                tb.add_scalar("Loss/Val", avg_val_loss, epoch + 1)
-                tb.add_scalar("Loss/Physics", avg_physics_loss, epoch + 1)
-                tb.add_scalar("Loss/Data", avg_data_loss, epoch + 1)
-                
-                if (epoch + 1) % 10 == 0:
+                # Print progress
+                print_interval = getattr(self.config, 'print_interval', 10)  # Default every 10 epochs
+                if (epoch + 1) % print_interval == 0 or epoch == 0:
                     print(f"Epoch {epoch+1}/{self.config.epochs} - "
                         f"Train: {avg_train_loss:.6f}, Val: {avg_val_loss:.6f}, "
                         f"Physics: {avg_physics_loss:.6f}, Data: {avg_data_loss:.6f}")
