@@ -2,6 +2,8 @@ import torch.nn as nn
 import torch
 import os
 import csv
+import matplotlib.pyplot as plt
+import pandas as pd
 from models.pinn import PINN
 from training.losses import compute_loss
 from utils.config import Config
@@ -113,6 +115,9 @@ class Trainer:
             print(f"Training complete. Logs saved to {run_dir}")
             if self.best_model_path and os.path.exists(self.best_model_path):
                 print(f"Best model saved at: {self.best_model_path}")
+            
+            # Plot losses
+            self.plot_losses(run_dir)
     
     def _check_early_stopping(self, val_loss, epoch):
         """
@@ -167,6 +172,36 @@ class Trainer:
         
         avg_val_loss = total_val_loss / len(val_loader.dataset)
         return avg_val_loss
+
+    def plot_losses(self, run_dir):
+        """Plot training and validation losses."""
+        metrics_file = os.path.join(run_dir, "metrics.csv")
+        
+        if not os.path.exists(metrics_file):
+            print(f"Metrics file not found: {metrics_file}")
+            return
+        
+        # Read metrics
+        df = pd.read_csv(metrics_file)
+        
+        # Create figure
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        ax.plot(df['epoch'], df['train_loss'], label='Training Loss', linewidth=2)
+        ax.plot(df['epoch'], df['val_loss'], label='Validation Loss', linewidth=2)
+        
+        ax.set_xlabel('Epoch', fontsize=12)
+        ax.set_ylabel('Loss', fontsize=12)
+        ax.set_title('Training and Validation Loss', fontsize=14)
+        ax.legend(fontsize=11)
+        ax.grid(True, alpha=0.3)
+        
+        # Save figure
+        plot_path = os.path.join(run_dir, "loss_plot.png")
+        plt.tight_layout()
+        plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+        print(f"Loss plot saved to: {plot_path}")
+        plt.close()
 
     
 
