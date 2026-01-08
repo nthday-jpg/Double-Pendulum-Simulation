@@ -2,10 +2,14 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 
+def _generate_run_name():
+    """Generate default run name with timestamp."""
+    return f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
 @dataclass
 class Config:
     # experiment
-    run_name: str = field(default_factory=lambda: f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+    run_name: str = field(default_factory=_generate_run_name)
     seed: int = 0
 
     # data

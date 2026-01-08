@@ -177,20 +177,23 @@ class Trainer:
         self.model.eval()
         total_val_loss = 0.0
         
-        with torch.no_grad():
-            for batch in val_loader:
-                t, state = batch  # Val loader only returns (t, state)
-                # Accelerator handles device placement automatically
-                
-                # Create dummy point_type for validation (all data points)
-                point_type = torch.zeros(t.size(0), dtype=torch.long, device=t.device)
-                
+        for batch in val_loader:
+            t, state = batch  # Val loader only returns (t, state)
+            # Enable gradients for time (needed for physics loss)
+            t = t.requires_grad_(True)
+            
+            # Create dummy point_type for validation (all data points)
+            point_type = torch.zeros(t.size(0), dtype=torch.long, device=t.device)
+            
+            # Don't use torch.no_grad() because we need gradients for physics loss
+            with torch.no_grad():
+                # Only disable gradients for model parameters
                 loss, _ = compute_loss(
                     self.model, (t, state, point_type),
                     weight_data=self.config.data_weight,
                     weight_phys=self.config.physics_weight
                 )
-                total_val_loss += loss.item() * t.size(0)
+            total_val_loss += loss.item() * t.size(0)
         
         avg_val_loss = total_val_loss / len(val_loader.dataset)
         return avg_val_loss
