@@ -70,16 +70,27 @@ class Trainer:
         """
             Training loop for the PINN model.
         """
-        writer, csv_file, tb, run_dir = init_run(self.config)
-        self.run_dir = run_dir
-        self.best_model_path = os.path.join(run_dir, "checkpoints", "best_model.pth")
+        # Only main process initializes logging to avoid race conditions
+        if self.accelerator.is_main_process:
+            writer, csv_file, tb, run_dir = init_run(self.config)
+            self.run_dir = run_dir
+            self.best_model_path = os.path.join(run_dir, "checkpoints", "best_model.pth")
+        else:
+            writer, csv_file, tb, run_dir = None, None, None, None
+            self.run_dir = None
+            self.best_model_path = None
+        
+        # Wait for main process to create directories
+        self.accelerator.wait_for_everyone()
+        
         epoch = 0  # Initialize to avoid unbound variable
         
-        print("="*60, flush=True)
-        print(f"Starting training for {self.config.epochs} epochs...", flush=True)
-        print(f"Device: {self.device}", flush=True)
-        print(f"Using Accelerator with mixed precision: {self.accelerator.mixed_precision}", flush=True)
-        print("="*60, flush=True)
+        if self.accelerator.is_main_process:
+            print("="*60, flush=True)
+            print(f"Starting training for {self.config.epochs} epochs...", flush=True)
+            print(f"Device: {self.device}", flush=True)
+            print(f"Using Accelerator with mixed precision: {self.accelerator.mixed_precision}", flush=True)
+            print("="*60, flush=True)
         
         try: 
             for epoch in range(self.config.epochs):
@@ -123,30 +134,31 @@ class Trainer:
                 # Validation
                 avg_val_loss = self.evaluate(self.val_loader)
                 
-                # Logging (controlled by log_interval)
-                log_interval = getattr(self.config, 'log_interval', 1)  # Default to every epoch
-                if (epoch + 1) % log_interval == 0 or epoch == 0:
-                    log_dict = {
-                        "epoch": epoch + 1,
-                        "train_loss": avg_train_loss,
-                        "val_loss": avg_val_loss,
-                        "physics_loss": avg_physics_loss,
-                        "data_loss": avg_data_loss
-                    }
-                    writer.writerow(log_dict)
-                    csv_file.flush()
+                # Logging (controlled by log_interval) - only main process logs
+                if self.accelerator.is_main_process:
+                    log_interval = getattr(self.config, 'log_interval', 1)  # Default to every epoch
+                    if (epoch + 1) % log_interval == 0 or epoch == 0:
+                        log_dict = {
+                            "epoch": epoch + 1,
+                            "train_loss": avg_train_loss,
+                            "val_loss": avg_val_loss,
+                            "physics_loss": avg_physics_loss,
+                            "data_loss": avg_data_loss
+                        }
+                        writer.writerow(log_dict)
+                        csv_file.flush()
+                        
+                        tb.add_scalar("Loss/Train", avg_train_loss, epoch + 1)
+                        tb.add_scalar("Loss/Val", avg_val_loss, epoch + 1)
+                        tb.add_scalar("Loss/Physics", avg_physics_loss, epoch + 1)
+                        tb.add_scalar("Loss/Data", avg_data_loss, epoch + 1)
                     
-                    tb.add_scalar("Loss/Train", avg_train_loss, epoch + 1)
-                    tb.add_scalar("Loss/Val", avg_val_loss, epoch + 1)
-                    tb.add_scalar("Loss/Physics", avg_physics_loss, epoch + 1)
-                    tb.add_scalar("Loss/Data", avg_data_loss, epoch + 1)
-                
-                # Print progress
-                print_interval = getattr(self.config, 'print_interval', 10)  # Default every 10 epochs
-                if (epoch + 1) % print_interval == 0 or epoch == 0:
-                    print(f"Epoch {epoch+1}/{self.config.epochs} - "
-                        f"Train: {avg_train_loss:.6f}, Val: {avg_val_loss:.6f}, "
-                        f"Physics: {avg_physics_loss:.6f}, Data: {avg_data_loss:.6f}")
+                    # Print progress
+                    print_interval = getattr(self.config, 'print_interval', 10)  # Default every 10 epochs
+                    if (epoch + 1) % print_interval == 0 or epoch == 0:
+                        print(f"Epoch {epoch+1}/{self.config.epochs} - "
+                            f"Train: {avg_train_loss:.6f}, Val: {avg_val_loss:.6f}, "
+                            f"Physics: {avg_physics_loss:.6f}, Data: {avg_data_loss:.6f}")
                 
                 # Early stopping check
                 if self._check_early_stopping(avg_val_loss, epoch):
@@ -156,21 +168,25 @@ class Trainer:
                 if self.scheduler:
                     self.scheduler.step()
         
-        except KeyboardInterrupt:
-            print(f"\nTraining interrupted at epoch {epoch + 1}")
-            print("Saving current model state...")
-            unwrapped_model = self.accelerator.unwrap_model(self.model)
-            save_checkpoint(unwrapped_model, self.optimizer, self.config, run_dir, epoch + 1)
+        exceif self.accelerator.is_main_process:
+                print(f"\nTraining interrupted at epoch {epoch + 1}")
+                print("Saving current model state...")
+                unwrapped_model = self.accelerator.unwrap_model(self.model)
+                save_checkpoint(unwrapped_model, self.optimizer, self.config, run_dir, epoch + 1)
         
         finally:
-            csv_file.close()
-            tb.close()
-            print(f"Training complete. Logs saved to {run_dir}")
-            if self.best_model_path and os.path.exists(self.best_model_path):
-                print(f"Best model saved at: {self.best_model_path}")
-            
-            # Plot losses
-            if hasattr(self, 'run_dir'):
+            if self.accelerator.is_main_process:
+                if csv_file:
+                    csv_file.close()
+                if tb:
+                    tb.close()
+                print(f"Training complete. Logs saved to {run_dir}")
+                if self.best_model_path and os.path.exists(self.best_model_path):
+                    print(f"Best model saved at: {self.best_model_path}")
+                
+                # Plot losses
+                if hasattr(self, 'run_dir') and self.run_dir:
+                if hasattr(self, 'run_dir'):
                 self.plot_losses(self.run_dir)
     
     def _check_early_stopping(self, val_loss, epoch):
@@ -179,21 +195,20 @@ class Trainer:
             Returns True if training should stop.
         """
         if not hasattr(self.config, 'early_stopping_patience') or self.config.early_stopping_patience is None:
-            # If early stopping not configured, just save best model
-            if val_loss < self.best_val_loss:
-                self.best_val_loss = val_loss
-                # Note: save_checkpoint saves to run_dir/checkpoints/best_model.pth
-                if self.best_model_path and hasattr(self, 'run_dir'):
-                    # Unwrap model for saving
-                    unwrapped_model = self.accelerator.unwrap_model(self.model)
-                    save_checkpoint(unwrapped_model, self.optimizer, self.config, 
-                                   self.run_dir, epoch + 1, is_best=True)
-                    print(f"  → New best model saved (val_loss: {val_loss:.6f})")
-            return False
-        
-        if val_loss < self.best_val_loss:
-            self.best_val_loss = val_loss
-            self.patience_counter = 0
+            # Only main process saves checkpoints
+            if self.accelerator.is_main_process and self.best_model_path and hasattr(self, 'run_dir') and self.run_dir:
+                # Unwrap model for saving
+                unwrapped_model = self.accelerator.unwrap_model(self.model)
+                save_checkpoint(unwrapped_model, self.optimizer, self.config, 
+                               self.run_dir, epoch + 1, is_best=True)
+                print(f"  → New best model saved (val_loss: {val_loss:.6f})")
+        return False
+    
+    if val_loss < self.best_val_loss:
+        self.best_val_loss = val_loss
+        self.patience_counter = 0
+        # Only main process saves checkpoints
+        if self.accelerator.is_main_process and self.best_model_path and hasattr(self, 'run_dir') and self.run_dir:
             if self.best_model_path and hasattr(self, 'run_dir'):
                 # Unwrap model for saving
                 unwrapped_model = self.accelerator.unwrap_model(self.model)
