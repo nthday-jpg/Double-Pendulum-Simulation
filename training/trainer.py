@@ -22,6 +22,16 @@ class Trainer:
         
         self.config = config
         
+        # Apply torch.compile if requested (PyTorch 2.0+)
+        if getattr(config, 'use_compile', False):
+            try:
+                compile_mode = getattr(config, 'compile_mode', 'default')
+                print(f"Applying torch.compile with mode='{compile_mode}'...")
+                model = torch.compile(model, mode=compile_mode)  # type: ignore
+                print("✓ Model compiled successfully")
+            except Exception as e:
+                print(f"⚠ Warning: torch.compile failed ({e}), continuing without compilation")
+        
         # Prepare model, optimizer, and dataloaders with accelerator
         self.model, self.optimizer, self.train_loader, self.val_loader = self.accelerator.prepare(
             model, optimizer, train_loader, val_loader
