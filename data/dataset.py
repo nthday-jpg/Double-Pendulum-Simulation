@@ -12,6 +12,7 @@ class PendulumDataset(Dataset):
     Returns:
         t      : (1,)
         state  : (2,) = [theta1, theta2]
+        point_type : 0 (data point)
     """
     def __init__(self, data_path, parameters_path):
         data = np.load(data_path)
@@ -27,14 +28,17 @@ class PendulumDataset(Dataset):
     def __getitem__(self, idx):
         t = torch.tensor([self.t[idx]], dtype=torch.float32)
         state = torch.tensor(np.concatenate([self.q[idx]]), dtype=torch.float32)
-        return t, state
+        return t, state, 0  # point_type = 0 for data
 
 
 class CollocationDataset(Dataset):
     """
-        Deterministic collocation points 
-        Returns:
-            t      : (1,)
+    Collocation points for physics loss.
+    
+    Returns:
+        t      : (1,)
+        state  : (2,) dummy zeros
+        point_type : 1 (collocation point)
     """
     def __init__(self, tmin, tmax, num_points):
         self.t = np.random.uniform(tmin, tmax, size=(num_points, 1))
@@ -43,98 +47,26 @@ class CollocationDataset(Dataset):
         return len(self.t)
 
     def __getitem__(self, idx):
-        return torch.tensor(self.t[idx], dtype=torch.float32)
-
-    
-class DataPointDataset(Dataset):
-    """ 
-        Wrapper for data points with type annotation.
-        Returns:
-            t      : (1,)
-            state  : (2,)   
-            point_type : 0 for data
-    """
-    def __init__(self, data_dataset):
-        self.data_dataset = data_dataset
-
-    def __len__(self):
-        return len(self.data_dataset)
-    
-    def __getitem__(self, idx):
-        t, state = self.data_dataset[idx]
-        return t, state, 0
-
-
-class CollocationPointDataset(Dataset):
-    """ 
-        Wrapper for collocation points with type annotation.
-        Returns:
-            t      : (1,)
-            state  : (2,) dummy zeros   
-            point_type : 1 for collocation
-    """
-    def __init__(self, collocation_dataset):
-        self.collocation_dataset = collocation_dataset
-
-    def __len__(self):
-        return len(self.collocation_dataset)
-    
-    def __getitem__(self, idx):
-        t = self.collocation_dataset[idx]
+        t = torch.tensor(self.t[idx], dtype=torch.float32)
         dummy_state = torch.zeros(2)
-        return t, dummy_state, 1  # type = 1 for collocation
+        return t, dummy_state, 1  # point_type = 1 for collocation
 
 
-class MixedDataset(Dataset):
-    """ 
-        Dataset combining data points and collocation points.
-        Returns:
-            t      : (1,)
-            state  : (2,) or None   
-            point_type : 0 for data, 1 for collocation
-    """
-
-    def __init__(self, data_dataset, collocation_dataset, data_fraction):
-        self.data_dataset = data_dataset
-        self.data_size = len(data_dataset)
-        self.collocation_dataset = collocation_dataset
-        self.collocation_size = len(collocation_dataset)
-        self.n_collocations_per_epoch = self.data_size * (1 - data_fraction) / data_fraction
-        self.total_size = self.data_size + int(self.n_collocations_per_epoch)
-
-    def __len__(self):
-        return self.total_size
-    
-    def __getitem__(self, idx):
-        if idx < self.data_size:
-            t, state = self.data_dataset[idx]
-            return t, state, 0
-        else:
-            collocation_idx = (idx - self.data_size) % self.collocation_size
-            t = self.collocation_dataset[collocation_idx]
-            dummy_state = torch.zeros(2)  # Placeholder
-            return t, dummy_state, 1
-
-        
 def get_dataloader(data_path, parameters_path, config: Config,
-                   num_workers=None, shuffle=True, val_split=0.2,
-                   separate_loaders=False):
+                   num_workers=None, shuffle=True, val_split=0.2):
     """
-    Create dataloaders for PINN training.
+    Create separate dataloaders for data and collocation with different batch sizes.
     
-    Args:
-        separate_loaders: If True, returns (data_loader, collocation_loader, val_loader)
-                        If False, returns (train_loader, val_loader)
+    Returns:
+        data_loader: DataLoader for data points (batch_size from config.batch_size)
+        collocation_loader: DataLoader for collocation points (batch_size from config.batch_size_collocation)
+        val_loader: DataLoader for validation
     
     Usage:
-        # Mixed mode (default):
-        train_loader, val_loader = get_dataloader(..., separate_loaders=False)
-        trainer = Trainer(model, config, train_loader, val_loader, optimizer)
-        
-        # Separate mode (for different batch sizes):
-        cfg.batch_size_collocation = 256  # larger than data batch
-        data_loader, colloc_loader, val_loader = get_dataloader(..., separate_loaders=True)
-        trainer = Trainer(model, config, data_loader, val_loader, optimizer, collocation_loader=colloc_loader)
+        config.batch_size = 32  # small for data
+        config.batch_size_collocation = 256  # large for collocation
+        data_loader, colloc_loader, val_loader = get_dataloader(...)
+        trainer = Trainer(model, config, data_loader, colloc_loader, val_loader, optimizer)
     """
     if num_workers is None:
         num_workers = min(8, os.cpu_count() or 1)
@@ -158,25 +90,18 @@ def get_dataloader(data_path, parameters_path, config: Config,
                             shuffle=False, num_workers=num_workers,
                             pin_memory=torch.cuda.is_available())
 
-    if separate_loaders:
-        data_loader = DataLoader(
-            DataPointDataset(train_data_dataset), 
-            batch_size=batch_size,
-            shuffle=shuffle, num_workers=num_workers,
-            pin_memory=torch.cuda.is_available()
-        )
-        collocation_loader = DataLoader(
-            CollocationPointDataset(collocation_dataset),
-            batch_size=batch_size_collocation,
-            shuffle=shuffle, num_workers=num_workers,
-            pin_memory=torch.cuda.is_available()
-        )
-        print(f"Separate loaders: data_bs={batch_size}, colloc_bs={batch_size_collocation}, workers={num_workers}")
-        return data_loader, collocation_loader, val_loader
-    else:
-        train_dataset = MixedDataset(train_data_dataset, collocation_dataset, config.data_fraction)
-        train_loader = DataLoader(train_dataset, batch_size=batch_size,
-                                  shuffle=shuffle, num_workers=num_workers,
-                                  pin_memory=torch.cuda.is_available())
-        print(f"Mixed loader: batch_size={batch_size}, workers={num_workers}")
-        return train_loader, val_loader
+    data_loader = DataLoader(
+        train_data_dataset, 
+        batch_size=batch_size,
+        shuffle=shuffle, num_workers=num_workers,
+        pin_memory=torch.cuda.is_available()
+    )
+    collocation_loader = DataLoader(
+        collocation_dataset,
+        batch_size=batch_size_collocation,
+        shuffle=shuffle, num_workers=num_workers,
+        pin_memory=torch.cuda.is_available()
+    )
+    
+    print(f"DataLoaders: data_bs={batch_size}, colloc_bs={batch_size_collocation}, workers={num_workers}")
+    return data_loader, collocation_loader, val_loader

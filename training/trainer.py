@@ -13,23 +13,17 @@ from utils.logging import init_run, save_checkpoint, load_checkpoint
 
 class Trainer:
     def __init__(self, model: PINN, config: Config,
-                 train_loader, val_loader,
-                 optimizer, scheduler=None,
-                 collocation_loader=None):
+                 data_loader, collocation_loader, val_loader,
+                 optimizer, scheduler=None):
         """
-        Unified trainer supporting both modes:
-        1. Mixed: train_loader contains both data+collocation (collocation_loader=None)
-        2. Separate: train_loader=data, collocation_loader=collocation (different batch sizes)
+        Trainer with separate dataloaders for data and collocation points.
+        Allows different batch sizes for each.
         
         Usage:
-            # Mixed mode (default):
-            train_loader, val_loader = get_dataloader(...)
-            trainer = Trainer(model, config, train_loader, val_loader, optimizer)
-            
-            # Separate mode (for different batch sizes):
-            config.batch_size_collocation = 256
-            data_loader, colloc_loader, val_loader = get_dataloader(..., separate_loaders=True)
-            trainer = Trainer(model, config, data_loader, val_loader, optimizer, collocation_loader=colloc_loader)
+            config.batch_size = 32  # small for data
+            config.batch_size_collocation = 256  # large for collocation
+            data_loader, colloc_loader, val_loader = get_dataloader(...)
+            trainer = Trainer(model, config, data_loader, colloc_loader, val_loader, optimizer)
         """
         self.accelerator = Accelerator(
             mixed_precision='fp16' if hasattr(config, 'mixed_precision') and config.mixed_precision else 'no',
@@ -37,22 +31,15 @@ class Trainer:
         )
         
         self.config = config
-        self.use_separate_loaders = collocation_loader is not None
         
         # Disable torch.compile for PINNs (incompatible with double backward)
         if getattr(config, 'use_compile', False):
             print("⚠ torch.compile disabled: incompatible with PINN double backward")
         
         # Prepare model, optimizer, and dataloaders
-        if self.use_separate_loaders:
-            self.model, self.optimizer, self.train_loader, self.collocation_loader, self.val_loader = self.accelerator.prepare(
-                model, optimizer, train_loader, collocation_loader, val_loader
-            )
-        else:
-            self.model, self.optimizer, self.train_loader, self.val_loader = self.accelerator.prepare(
-                model, optimizer, train_loader, val_loader
-            )
-            self.collocation_loader = None
+        self.model, self.optimizer, self.data_loader, self.collocation_loader, self.val_loader = self.accelerator.prepare(
+            model, optimizer, data_loader, collocation_loader, val_loader
+        )
         
         self.scheduler = scheduler
         self.device = self.accelerator.device
@@ -95,7 +82,7 @@ class Trainer:
             print("="*60, flush=True)
             print(f"Starting training for {self.config.epochs} epochs...", flush=True)
             print(f"Device: {self.device}", flush=True)
-            print(f"Mode: {'Separate loaders' if self.use_separate_loaders else 'Mixed loader'}", flush=True)
+            print(f"Data batch: {self.config.batch_size}, Collocation batch: {self.config.batch_size_collocation or self.config.batch_size}", flush=True)
             print("="*60, flush=True)
         
         try:
@@ -106,28 +93,21 @@ class Trainer:
                 total_data_loss = 0.0
                 total_samples = 0
                 
-                if self.use_separate_loaders:
-                    # Separate mode: alternate between data and collocation batches
-                    data_iter = iter(self.train_loader)
-                    colloc_iter = itertools.cycle(self.collocation_loader)
+                # Alternate between data and collocation batches
+                data_iter = iter(self.data_loader)
+                colloc_iter = itertools.cycle(self.collocation_loader)
+                
+                for data_batch in data_iter:
+                    total_train_loss, total_physics_loss, total_data_loss, total_samples = self._train_step(
+                        data_batch, total_train_loss, total_physics_loss, total_data_loss, total_samples
+                    )
                     
-                    for data_batch in data_iter:
+                    # Process collocation batches based on data_fraction
+                    n_colloc = max(1, int((1 - self.config.data_fraction) / self.config.data_fraction))
+                    for _ in range(n_colloc):
+                        colloc_batch = next(colloc_iter)
                         total_train_loss, total_physics_loss, total_data_loss, total_samples = self._train_step(
-                            data_batch, total_train_loss, total_physics_loss, total_data_loss, total_samples
-                        )
-                        
-                        # Process collocation batches based on data_fraction
-                        n_colloc = max(1, int((1 - self.config.data_fraction) / self.config.data_fraction))
-                        for _ in range(n_colloc):
-                            colloc_batch = next(colloc_iter)
-                            total_train_loss, total_physics_loss, total_data_loss, total_samples = self._train_step(
-                                colloc_batch, total_train_loss, total_physics_loss, total_data_loss, total_samples
-                            )
-                else:
-                    # Mixed mode: single dataloader with both types
-                    for batch in self.train_loader:
-                        total_train_loss, total_physics_loss, total_data_loss, total_samples = self._train_step(
-                            batch, total_train_loss, total_physics_loss, total_data_loss, total_samples
+                            colloc_batch, total_train_loss, total_physics_loss, total_data_loss, total_samples
                         )
                 
                 # Compute epoch averages
