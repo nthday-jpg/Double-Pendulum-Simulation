@@ -111,17 +111,21 @@ def build_numpy_functions():
 
 
 # Globals to hold the built numpy functions
-_M_func_numpy, _C_func_numpy = None, None
+_M_func_numpy = None
+_C_func_numpy = None
 
 
 def _ensure_numpy_built():
     global _M_func_numpy, _C_func_numpy
-    if _M_func_numpy is None:
+    if _M_func_numpy is None or _C_func_numpy is None:
         _M_func_numpy, _C_func_numpy = build_numpy_functions()
 
 
 def double_pendulum_derivatives(t, y, params):
     _ensure_numpy_built()
+    
+    # Type assertion for Pylance
+    assert _M_func_numpy is not None and _C_func_numpy is not None
     
     theta1, theta2, omega1, omega2 = y
     m1, m2, l1, l2, g = params
@@ -306,13 +310,13 @@ def _ensure_built():
     if _M_fn_torch is None:
         _M_fn_torch, _C_fn_torch = build_torch_functions()
 
-def get_M_fn():
+def get_M_fn_torch():
     _ensure_built()
-    return M_fn
+    return _M_fn_torch
 
-def get_C_fn():
+def get_C_fn_torch():
     _ensure_built()
-    return C_fn
+    return _C_fn_torch
 
 if __name__ == "__main__":
     # Test the derivation

@@ -1,4 +1,4 @@
-from physics.equations import get_M_fn, get_C_fn
+from physics.equations import get_M_fn_torch, get_C_fn_torch
 import torch
 
 
@@ -41,8 +41,11 @@ def physics_residual(q, qdot, qdd, parameters):
     l2 = torch.tensor(parameters['l2'], dtype=q.dtype, device=device)
     g = torch.tensor(parameters['g'], dtype=q.dtype, device=device)
 
-    M_fn = get_M_fn()
-    C_fn = get_C_fn()
+    M_fn = get_M_fn_torch()
+    C_fn = get_C_fn_torch()
+    
+    # Type assertion for Pylance
+    assert M_fn is not None and C_fn is not None
 
     M = M_fn(q[:, 0], q[:, 1], m1, m2, l1, l2)  # (N, 2, 2)
     C = C_fn(q[:, 0], q[:, 1], qdot[:, 0], qdot[:, 1], m1, m2, l1, l2, g)  # (N, 2)
