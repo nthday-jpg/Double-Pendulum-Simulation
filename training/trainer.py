@@ -124,17 +124,19 @@ class Trainer:
             if val_loss < self.best_val_loss:
                 self.best_val_loss = val_loss
                 # Note: save_checkpoint saves to run_dir/checkpoints/best_model.pth
-                save_checkpoint(self.model, self.optimizer, self.config, 
-                               os.path.dirname(self.best_model_path), epoch + 1, is_best=True)
-                print(f"  → New best model saved (val_loss: {val_loss:.6f})")
+                if self.best_model_path:
+                    save_checkpoint(self.model, self.optimizer, self.config, 
+                                   os.path.dirname(self.best_model_path), epoch + 1, is_best=True)
+                    print(f"  → New best model saved (val_loss: {val_loss:.6f})")
             return False
         
         if val_loss < self.best_val_loss:
             self.best_val_loss = val_loss
             self.patience_counter = 0
-            save_checkpoint(self.model, self.optimizer, self.config, 
-                           os.path.dirname(self.best_model_path), epoch + 1, is_best=True)
-            print(f"  → New best model saved (val_loss: {val_loss:.6f})")
+            if self.best_model_path:
+                save_checkpoint(self.model, self.optimizer, self.config, 
+                               os.path.dirname(self.best_model_path), epoch + 1, is_best=True)
+                print(f"  → New best model saved (val_loss: {val_loss:.6f})")
         else:
             self.patience_counter += 1
             print(f"  → No improvement. Patience: {self.patience_counter}/{self.config.early_stopping_patience}")
@@ -165,6 +167,8 @@ class Trainer:
         
         avg_val_loss = total_val_loss / len(val_loader.dataset)
         return avg_val_loss
+
+    
 
     def save_model(self, path):
         torch.save(self.model.state_dict(), path)
