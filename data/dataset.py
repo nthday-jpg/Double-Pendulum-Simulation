@@ -91,7 +91,7 @@ def get_dataloader(data_path, parameters_path,
     """
     # Auto-detect optimal num_workers if not specified
     if num_workers is None:
-        num_workers = min(4, os.cpu_count() or 1)
+        num_workers = min(8, os.cpu_count() or 1)
         # On Windows, use 0 workers to avoid multiprocessing issues
         if os.name == 'nt':
             num_workers = 0
