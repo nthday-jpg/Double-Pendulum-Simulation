@@ -48,19 +48,27 @@ class Trainer:
         self.best_model_path = None
         self.patience_counter = 0
         
-        if config.checkpoint_path and os.path.exists(config.checkpoint_path):
-            self._resume_from_checkpoint(config.checkpoint_path)
+        # Check and load checkpoint if provided
+        if hasattr(config, 'checkpoint_path') and config.checkpoint_path:
+            if os.path.exists(config.checkpoint_path):
+                self._resume_from_checkpoint(config.checkpoint_path)
+            else:
+                if self.accelerator.is_main_process:
+                    print(f"⚠ Checkpoint path provided but not found: {config.checkpoint_path}")
+                    print(f"  Starting training from scratch...")
 
     def _resume_from_checkpoint(self, checkpoint_path):
         """Resume training from checkpoint."""
-        print(f"Resuming training from checkpoint: {checkpoint_path}")
+        if self.accelerator.is_main_process:
+            print(f"📁 Resuming training from checkpoint: {checkpoint_path}")
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
         unwrapped_model = self.accelerator.unwrap_model(self.model)
         unwrapped_model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         if 'best_val_loss' in checkpoint:
             self.best_val_loss = checkpoint['best_val_loss']
-        print(f"✓ Resumed from epoch {checkpoint.get('epoch', 'unknown')}, best_val_loss: {self.best_val_loss:.6f}")
+        if self.accelerator.is_main_process:
+            print(f"✓ Resumed from epoch {checkpoint.get('epoch', 'unknown')}, best_val_loss: {self.best_val_loss:.6f}")
 
     def train(self):
         """Training loop for PINN model."""

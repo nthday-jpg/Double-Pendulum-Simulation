@@ -29,6 +29,7 @@ from models.pinn import PINN
 from training.trainer import Trainer
 from data.dataset import get_dataloader
 from utils.config import Config
+from utils.seed import set_seed
 
 
 def parse_args():
@@ -110,6 +111,8 @@ def main():
     # Override lr if provided
     if hasattr(args, 'lr'):
         cfg.lr = args.lr
+    
+    set_seed(cfg.seed)
     
     # Initialize model
     model = PINN(cfg)
