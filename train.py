@@ -112,7 +112,9 @@ def main():
     if hasattr(args, 'lr'):
         cfg.lr = args.lr
     
+    # Set seed for reproducibility
     set_seed(cfg.seed)
+    print(f"🌱 Random seed set to: {cfg.seed}")
     
     # Initialize model
     model = PINN(cfg)

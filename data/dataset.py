@@ -82,25 +82,37 @@ def get_dataloader(data_path, parameters_path, config: Config,
     data_size = len(data_dataset)
     val_size = int(data_size * val_split)
     train_size = data_size - val_size
+    
+    # Use generator with seed for reproducible random_split
+    generator = torch.Generator().manual_seed(config.seed)
     train_data_dataset, val_data_dataset = torch.utils.data.random_split(
-        data_dataset, [train_size, val_size]
+        data_dataset, [train_size, val_size], generator=generator
     )
+    
+    # Import seed_worker for DataLoader workers
+    from utils.seed import seed_worker
     
     val_loader = DataLoader(val_data_dataset, batch_size=batch_size, 
                             shuffle=False, num_workers=num_workers,
-                            pin_memory=torch.cuda.is_available())
+                            pin_memory=torch.cuda.is_available(),
+                            worker_init_fn=seed_worker,
+                            generator=torch.Generator().manual_seed(config.seed))
 
     data_loader = DataLoader(
         train_data_dataset, 
         batch_size=batch_size,
         shuffle=shuffle, num_workers=num_workers,
-        pin_memory=torch.cuda.is_available()
+        pin_memory=torch.cuda.is_available(),
+        worker_init_fn=seed_worker,
+        generator=torch.Generator().manual_seed(config.seed)
     )
     collocation_loader = DataLoader(
         collocation_dataset,
         batch_size=batch_size_collocation,
         shuffle=shuffle, num_workers=num_workers,
-        pin_memory=torch.cuda.is_available()
+        pin_memory=torch.cuda.is_available(),
+        worker_init_fn=seed_worker,
+        generator=torch.Generator().manual_seed(config.seed)
     )
     
     print(f"DataLoaders: data_bs={batch_size}, colloc_bs={batch_size_collocation}, workers={num_workers}")
