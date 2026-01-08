@@ -110,15 +110,19 @@ def save_checkpoint(model, optimizer, cfg, run_dir, epoch, is_best=False, save_f
         'config': vars(cfg),  # Save config as dict
     }
     
+    # Ensure checkpoints directory exists
+    checkpoints_dir = os.path.join(run_dir, "checkpoints")
+    os.makedirs(checkpoints_dir, exist_ok=True)
+    
     # Save periodic checkpoint
     if epoch % save_frequency == 0:
         filename = f"checkpoint_epoch_{epoch}.pth"
-        filepath = os.path.join(run_dir, "checkpoints", filename)
+        filepath = os.path.join(checkpoints_dir, filename)
         torch.save(checkpoint, filepath)
     
     # Always save best
     if is_best:
-        best_filepath = os.path.join(run_dir, "checkpoints", "best_model.pth")
+        best_filepath = os.path.join(checkpoints_dir, "best_model.pth")
         torch.save(checkpoint, best_filepath)
 
 def load_checkpoint(checkpoint_path, model_class, device='cpu'):
