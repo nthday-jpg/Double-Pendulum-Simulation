@@ -6,99 +6,27 @@ from torch.utils.tensorboard import SummaryWriter
 import torch
 from utils.config import Config
 
-def init_run(cfg):
-    """
-        Initialize the directory structure and logging utilities for a new experiment run.
-        Args:
-            cfg: Configuration object containing run parameters.
-        Returns:    
-            writer: CSV DictWriter for logging metrics.
-            csv_file: Open CSV file handle.
-            tb: TensorBoard SummaryWriter.
-            run_dir: Path to the run directory.
-    """
-    
+def init_run(cfg: Config):
+    """Initialize logging for a training run."""
     run_dir = os.path.join("runs", cfg.run_name)
-    os.makedirs(run_dir, exist_ok=False)
-
-    # for saving model checkpoints
-    os.makedirs(os.path.join(run_dir, "checkpoints"))
-    # for TensorBoard logs
-    os.makedirs(os.path.join(run_dir, "tb"))
-
-    # save config
-    with open(os.path.join(run_dir, "config.yaml"), "w") as f:
-        yaml.dump(vars(cfg), f)
-
-    # CSV setup - add physics parameters to fieldnames
+    os.makedirs(run_dir, exist_ok=True)
+    
+    # CSV logging
+    csv_path = os.path.join(run_dir, "metrics.csv")
+    csv_file = open(csv_path, "w", newline="")
     fieldnames = [
-        "epoch",
-        "train_loss",
-        "val_loss",
-        "physics_loss",
-        "data_loss",
-        "rollout_mse",
-        "energy_drift"
+        "epoch", 
+        "train_loss", "train_physics", "train_data",
+        "val_loss", "val_physics", "val_data",
+        "lr"
     ]
-    
-    # Add physics parameters if they exist in config
-    if hasattr(cfg, 'm1'):
-        fieldnames.extend(['m1', 'm2', 'l1', 'l2', 'g'])
-    
-    csv_file = open(os.path.join(run_dir, "metrics.csv"), "w", newline="")
     writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
     writer.writeheader()
-
-    # TensorBoard
-    tb = SummaryWriter(log_dir=os.path.join(run_dir, "tb"))
     
-    # Determine architecture representation
-    if hasattr(cfg, 'hidden_dims') and cfg.hidden_dims is not None:
-        arch_str = str(cfg.hidden_dims)
-        total_hidden_units = sum(cfg.hidden_dims)
-        num_layers = len(cfg.hidden_dims)
-    else:
-        # Fallback to old uniform architecture
-        hidden_dim = getattr(cfg, 'hidden_dim', 64)
-        depth = getattr(cfg, 'depth', 2)
-        arch_str = f"{hidden_dim}x{depth}"
-        total_hidden_units = hidden_dim * depth
-        num_layers = depth
+    # TensorBoard logging
+    tb = SummaryWriter(log_dir=run_dir)
     
-    # Prepare hyperparameters dictionary
-    hparams = {
-        'learning_rate': cfg.lr,
-        'batch_size': cfg.batch_size,
-        'total_hidden_units': total_hidden_units,
-        'num_layers': num_layers,
-        'physics_weight': cfg.physics_weight,
-        'data_weight': cfg.data_weight,
-        'n_collocation': cfg.n_collocation,
-        'data_fraction': cfg.data_fraction,
-        'm1': cfg.m1 if hasattr(cfg, 'm1') else 1.0,
-        'm2': cfg.m2 if hasattr(cfg, 'm2') else 1.0,
-        'l1': cfg.l1 if hasattr(cfg, 'l1') else 1.0,
-        'l2': cfg.l2 if hasattr(cfg, 'l2') else 1.0,
-        'g': cfg.g if hasattr(cfg, 'g') else 9.81
-    }
-    
-    # Add individual layer dimensions if using custom architecture
-    if hasattr(cfg, 'hidden_dims') and cfg.hidden_dims is not None:
-        for i, dim in enumerate(cfg.hidden_dims):
-            hparams[f'layer_{i}_dim'] = dim
-    else:
-        hparams['hidden_dim'] = getattr(cfg, 'hidden_dim', 64)
-        hparams['depth'] = getattr(cfg, 'depth', 2)
-    
-    # Log hyperparameters to TensorBoard
-    tb.add_hparams(hparams, {})
-    
-    # Also log architecture as text for easy reading
-    tb.add_text('Model/Architecture', arch_str, 0)
-    tb.add_text('Model/Type', cfg.model, 0)
-    tb.add_text('Training/Optimizer', cfg.optimizer, 0)
-    tb.add_text('Physics/Residual_Type', cfg.residual_type, 0)
-
+    print(f"📊 Logging to: {run_dir}")
     return writer, csv_file, tb, run_dir
 
 def save_checkpoint(model, optimizer, cfg, run_dir, epoch, is_best=False, save_frequency=100):
