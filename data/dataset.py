@@ -7,7 +7,8 @@ from utils.config import Config
 
 class PendulumDataset(Dataset):
     """
-    Dataset for a single double-pendulum trajectory.
+    Dataset for multiple double-pendulum trajectories.
+    Each trajectory has its own physics parameters stored in parameters_XXX.json.
 
     Returns:
         t      : (1,)
@@ -15,53 +16,125 @@ class PendulumDataset(Dataset):
         state  : (2,) = [theta1, theta2]
         point_type : 0 (data point)
     """
-    def __init__(self, data_path, parameters_path):
-        data = np.load(data_path)
-        self.t = data["t"]          # (N,)
-        self.initial_state = data["initial_state"]  # (4,)
-        self.q = data["q"]          # (N, 2)
-
-        with open(parameters_path, "r") as f:
-            self.parameters = json.load(f)
+    def __init__(self, data_dir):
+        """
+        Args:
+            data_dir: Directory containing trajectory files (trajectory_000.npz, trajectory_001.npz, ...)
+                     and corresponding parameter files (parameters_000.json, parameters_001.json, ...)
+        """
+        # Load all trajectory files
+        self.trajectories = []
+        self.trajectory_lengths = []
+        self.cumulative_lengths = [0]
+        self.parameters_list = []
+        
+        # Find all trajectory files in the directory
+        trajectory_files = sorted([f for f in os.listdir(data_dir) if f.startswith('trajectory_') and f.endswith('.npz')])
+        
+        if not trajectory_files:
+            raise ValueError(f"No trajectory files found in {data_dir}")
+        
+        for traj_file in trajectory_files:
+            # Extract trajectory index from filename
+            traj_idx = int(traj_file.split('_')[1].split('.')[0])
+            
+            # Load trajectory data
+            data = np.load(os.path.join(data_dir, traj_file))
+            trajectory = {
+                't': data["t"],              # (N,)
+                'initial_state': data["initial_state"],  # (4,)
+                'q': data["q"]               # (N, 2)
+            }
+            self.trajectories.append(trajectory)
+            self.trajectory_lengths.append(len(data["t"]))
+            self.cumulative_lengths.append(self.cumulative_lengths[-1] + len(data["t"]))
+            
+            # Load individual parameter file for this trajectory
+            params_file = os.path.join(data_dir, f"parameters_{traj_idx:03d}.json")
+            if os.path.exists(params_file):
+                with open(params_file, "r") as f:
+                    self.parameters_list.append(json.load(f))
+            else:
+                raise FileNotFoundError(f"Parameter file not found: {params_file}")
+        
+        self.total_length = self.cumulative_lengths[-1]
+        
+        # Check if all parameters are the same
+        all_same = all(p == self.parameters_list[0] for p in self.parameters_list)
+        params_msg = "with shared parameters" if all_same else "with different parameters"
+        print(f"📊 Loaded {len(self.trajectories)} trajectories {params_msg}, {self.total_length} total data points")
 
     def __len__(self):
-        return len(self.t)
+        return self.total_length
 
     def __getitem__(self, idx):
-        t = torch.tensor([self.t[idx]], dtype=torch.float32)
-        initial_state = torch.tensor(self.initial_state, dtype=torch.float32)
-        state = torch.tensor(np.concatenate([self.q[idx]]), dtype=torch.float32)
+        # Find which trajectory this index belongs to
+        traj_idx = 0
+        for i, cumlen in enumerate(self.cumulative_lengths[1:]):
+            if idx < cumlen:
+                traj_idx = i
+                break
+        
+        # Get local index within the trajectory
+        local_idx = idx - self.cumulative_lengths[traj_idx]
+        
+        # Get data from the appropriate trajectory
+        traj = self.trajectories[traj_idx]
+        t = torch.tensor([traj['t'][local_idx]], dtype=torch.float32)
+        initial_state = torch.tensor(traj['initial_state'], dtype=torch.float32)
+        state = torch.tensor(np.concatenate([traj['q'][local_idx]]), dtype=torch.float32)
         return t, initial_state, state, 0  # point_type = 0 for data
 
 
 class CollocationDataset(Dataset):
     """
     Collocation points for physics loss.
+    Samples from all trajectories' initial states.
     
     Returns:
         t      : (1,)
-        initial_state : (4,) dummy zeros
+        initial_state : (4,) sampled from available initial states
         state  : (2,) dummy zeros
         point_type : 1 (collocation point)
     """
-    def __init__(self, tmin, tmax, num_points, initial_state=None):
+    def __init__(self, tmin, tmax, num_points, initial_states=None):
+        """
+        Args:
+            tmin: Minimum time
+            tmax: Maximum time
+            num_points: Number of collocation points
+            initial_states: List of initial states (4,) from all trajectories, or None for zeros
+        """
         self.t = np.random.uniform(tmin, tmax, size=(num_points, 1))
-        self.initial_state = initial_state if initial_state is not None else np.zeros(4)
+        self.initial_states = initial_states if initial_states is not None else [np.zeros(4)]
+        # Randomly assign an initial state to each collocation point
+        self.assigned_initial_states = np.array([
+            self.initial_states[np.random.randint(len(self.initial_states))]
+            for _ in range(num_points)
+        ])
 
     def __len__(self):
         return len(self.t)
 
     def __getitem__(self, idx):
         t = torch.tensor(self.t[idx], dtype=torch.float32)
-        initial_state = torch.tensor(self.initial_state, dtype=torch.float32)
+        initial_state = torch.tensor(self.assigned_initial_states[idx], dtype=torch.float32)
         dummy_state = torch.zeros(2)
         return t, initial_state, dummy_state, 1  # point_type = 1 for collocation
 
 
-def get_dataloader(data_path, parameters_path, config: Config,
+def get_dataloader(data_dir, config,
                    num_workers=None, shuffle=True, val_split=0.2):
     """
     Create separate dataloaders for data and collocation with different batch sizes.
+    
+    Args:
+        data_dir: Directory containing trajectory files (trajectory_000.npz, trajectory_001.npz, ...)
+                 and parameter files (parameters_000.json, parameters_001.json, ...)
+        config: Training configuration
+        num_workers: Number of worker processes
+        shuffle: Whether to shuffle data
+        val_split: Validation split ratio
     
     Returns:
         data_loader: DataLoader for data points (batch_size from config.batch_size)
@@ -71,7 +144,7 @@ def get_dataloader(data_path, parameters_path, config: Config,
     Usage:
         config.batch_size = 32  # small for data
         config.batch_size_collocation = 256  # large for collocation
-        data_loader, colloc_loader, val_loader = get_dataloader(...)
+        data_loader, colloc_loader, val_loader = get_dataloader(data_dir, config)
         trainer = Trainer(model, config, data_loader, colloc_loader, val_loader, optimizer)
     """
     if num_workers is None:
@@ -82,11 +155,11 @@ def get_dataloader(data_path, parameters_path, config: Config,
     batch_size = config.batch_size
     batch_size_collocation = config.batch_size_collocation or batch_size
 
-    data_dataset = PendulumDataset(data_path, parameters_path)
+    data_dataset = PendulumDataset(data_dir)
     
-    # Get initial state from data_dataset to use in collocation
-    initial_state_np = data_dataset.initial_state
-    collocation_dataset = CollocationDataset(config.t_min, config.t_max, config.n_collocation, initial_state_np)
+    # Get all initial states from data_dataset to use in collocation
+    initial_states_np = [traj['initial_state'] for traj in data_dataset.trajectories]
+    collocation_dataset = CollocationDataset(config.t_min, config.t_max, config.n_collocation, initial_states_np)
 
     data_size = len(data_dataset)
     val_size = int(data_size * val_split)

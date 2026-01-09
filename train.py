@@ -44,12 +44,8 @@ def parse_args():
                         help='Random seed')
     
     # Data
-    parser.add_argument('--input_path', type=str, default='/kaggle/input/double-pendulum',
-                        help='Input data directory')
-    parser.add_argument('--data_file', type=str, default='trajectory_000.npz',
-                        help='Trajectory data file')
-    parser.add_argument('--params_file', type=str, default='parameters_000.json',
-                        help='Parameters file')
+    parser.add_argument('--data_dir', type=str, default='data/raw',
+                        help='Directory containing trajectory files (trajectory_*.npz) and parameters (parameters_*.json)')
     parser.add_argument('--val_split', type=float, default=0.2,
                         help='Validation split ratio')
     parser.add_argument('--normalize_time', action='store_true',
@@ -291,8 +287,7 @@ def main():
     
     # Get data loaders
     data_loader, colloc_loader, val_loader = get_dataloader(
-        data_path=f"{args.input_path}/{args.data_file}",
-        parameters_path=f"{args.input_path}/{args.params_file}",
+        data_dir=args.data_dir,
         config=cfg
     )
     
