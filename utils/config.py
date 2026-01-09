@@ -16,6 +16,7 @@ class Config:
     data_path: str = ""
     parameters_path: str = ""
     val_split: float = 0.2
+    test_split: float = 0.1
     normalize_time: bool = True
     normalize_state: bool = True
 

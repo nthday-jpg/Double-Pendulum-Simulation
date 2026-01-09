@@ -124,7 +124,7 @@ class CollocationDataset(Dataset):
 
 
 def get_dataloader(data_dir, config,
-                   num_workers=None, shuffle=True, val_split=0.2, test_split=0.2):
+                   num_workers=None, shuffle=True):
     """
     Create separate dataloaders for data, collocation, validation, and test sets.
     Test set contains the LAST time points from each trajectory for temporal extrapolation testing.
@@ -161,7 +161,7 @@ def get_dataloader(data_dir, config,
         end_idx = data_dataset.cumulative_lengths[traj_idx + 1]
         traj_length = end_idx - start_idx
 
-        train_val_length = int(traj_length * (1 - test_split))
+        train_val_length = int(traj_length * (1 - config.test_split))
         test_start = start_idx + train_val_length
 
         train_val_indices.extend(range(start_idx, test_start))
@@ -171,7 +171,7 @@ def get_dataloader(data_dir, config,
     
     # Split train/val from early time points
     train_val_size = len(train_val_indices)
-    val_size = int(train_val_size * val_split)
+    val_size = int(train_val_size * config.val_split)
     train_size = train_val_size - val_size
     
     # Use generator with seed for reproducible random_split
@@ -232,6 +232,6 @@ def get_dataloader(data_dir, config,
     
     print(f"DataLoaders: data_bs={batch_size}, colloc_bs={batch_size_collocation}, workers={num_workers}")
     print(f"Dataset splits: train={train_size}, val={val_size}, test={len(test_indices)} (late time)")
-    print(f"Temporal split: train/val use first {int((1-test_split)*100)}% of time, test uses last {int(test_split*100)}%")
+    print(f"Temporal split: train/val use first {int((1-config.test_split)*100)}% of time, test uses last {int(config.test_split*100)}%")
     
     return train_loader, collocation_loader, val_loader, test_loader
