@@ -164,8 +164,9 @@ class Trainer:
                     if (epoch + 1) % print_interval == 0 or epoch == 0:
                         self._print_beautiful_log(epoch + 1, avg_train_loss, avg_physics_loss, avg_data_loss,
                                                  val_metrics)
-                if (epoch + 1) % getattr(self.config, 'test_interval', 50) == 0:
-                    self.evaluate_test_set()
+                    
+                    if (epoch + 1) % getattr(self.config, 'test_interval', 50) == 0:
+                        self.evaluate_test_set()
 
                 # Synchronize before early stopping check
                 self.accelerator.wait_for_everyone()
