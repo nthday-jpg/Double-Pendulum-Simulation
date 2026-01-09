@@ -13,7 +13,7 @@ from utils.logging import init_run, save_checkpoint, load_checkpoint
 
 class Trainer:
     def __init__(self, model: PINN, config: Config,
-                 data_loader, collocation_loader, val_loader,
+                 data_loader, collocation_loader, val_loader, test_loader,
                  optimizer, scheduler=None):
         """
         Trainer with separate dataloaders for data and collocation points.
@@ -22,8 +22,8 @@ class Trainer:
         Usage:
             config.batch_size = 32  # small for data
             config.batch_size_collocation = 256  # large for collocation
-            data_loader, colloc_loader, val_loader = get_dataloader(...)
-            trainer = Trainer(model, config, data_loader, colloc_loader, val_loader, optimizer)
+            data_loader, colloc_loader, val_loader, test_loader = get_dataloader(...)
+            trainer = Trainer(model, config, data_loader, colloc_loader, val_loader, test_loader, optimizer)
         """
         self.accelerator = Accelerator(
             mixed_precision='fp16' if hasattr(config, 'mixed_precision') and config.mixed_precision else 'no',
@@ -37,8 +37,8 @@ class Trainer:
             print("⚠ torch.compile disabled: incompatible with PINN double backward")
         
         # Prepare model, optimizer, and dataloaders
-        self.model, self.optimizer, self.data_loader, self.collocation_loader, self.val_loader = self.accelerator.prepare(
-            model, optimizer, data_loader, collocation_loader, val_loader
+        self.model, self.optimizer, self.data_loader, self.collocation_loader, self.val_loader, self.test_loader = self.accelerator.prepare(
+            model, optimizer, data_loader, collocation_loader, val_loader, test_loader
         )
         
         self.scheduler = scheduler
@@ -218,6 +218,8 @@ class Trainer:
                 
                 if hasattr(self, 'run_dir') and self.run_dir:
                     self.plot_losses(self.run_dir)
+                
+                self.evaluate_test_set()
     
     def _train_step(self, batch, total_train_loss, total_physics_loss, total_data_loss, total_samples):
         """Single training step - shared between mixed and separate modes."""
@@ -365,6 +367,7 @@ class Trainer:
         plt.tight_layout()
         plt.savefig(plot_path, dpi=150, bbox_inches='tight')
         print(f"Loss plot saved to: {plot_path}")
+        plt.show()
         plt.close()
 
     def save_model(self, path):
@@ -374,5 +377,44 @@ class Trainer:
     def load_model(self, path):
         unwrapped_model = self.accelerator.unwrap_model(self.model)
         unwrapped_model.load_state_dict(torch.load(path, map_location=self.device))
-
-
+    
+    def evaluate_test_set(self):
+        """Evaluate the model on test set (temporal extrapolation) using same evaluation as validation."""
+        if self.test_loader is None:
+            print("⚠ No test loader available for evaluation")
+            return
+        
+        print("\n" + "="*80)
+        print("Evaluating on Test Set (Temporal Extrapolation)")
+        print("="*80)
+        
+        # Load best model if available
+        if self.best_model_path and os.path.exists(self.best_model_path):
+            print(f"Loading best model from: {self.best_model_path}")
+            checkpoint = torch.load(self.best_model_path, map_location=self.device)
+            unwrapped_model = self.accelerator.unwrap_model(self.model)
+            unwrapped_model.load_state_dict(checkpoint['model_state_dict'])
+        
+        # Evaluate using same method as validation
+        test_metrics = self.evaluate(self.test_loader, prefix="test")
+        
+        print("\nTest Set Results:")
+        print("-"*80)
+        print(f"{'Metric':<30} {'Value':<15}")
+        print("-"*80)
+        print(f"{'Total Loss':<30} {test_metrics['total_loss']:<15.6f}")
+        print(f"{'Physics Loss':<30} {test_metrics['physics_loss']:<15.6f}")
+        print(f"{'Data Loss':<30} {test_metrics['data_loss']:<15.6f}")
+        print("="*80 + "\n")
+        
+        # Save test results to file if run_dir is available
+        if hasattr(self, 'run_dir') and self.run_dir:
+            test_results_file = os.path.join(self.run_dir, "test_results.txt")
+            with open(test_results_file, 'w') as f:
+                f.write("Test Set Evaluation Results\n")
+                f.write("="*80 + "\n")
+                f.write(f"Total Loss:    {test_metrics['total_loss']:.6f}\n")
+                f.write(f"Physics Loss:  {test_metrics['physics_loss']:.6f}\n")
+                f.write(f"Data Loss:     {test_metrics['data_loss']:.6f}\n")
+                f.write("="*80 + "\n")
+            print(f"Test results saved to: {test_results_file}")

@@ -286,7 +286,7 @@ def main():
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=cfg.epochs // 3, gamma=0.1)
     
     # Get data loaders
-    data_loader, colloc_loader, val_loader = get_dataloader(
+    data_loader, colloc_loader, val_loader, test_loader = get_dataloader(
         data_dir=args.data_dir,
         config=cfg
     )
@@ -298,6 +298,7 @@ def main():
         data_loader=data_loader,
         collocation_loader=colloc_loader,
         val_loader=val_loader,
+        test_loader=test_loader,
         optimizer=optimizer,
         scheduler=scheduler
     )
