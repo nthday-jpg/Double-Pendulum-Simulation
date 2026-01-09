@@ -13,7 +13,7 @@ class Config:
     seed: int = 0
 
     # data
-    data_path: str = ""
+    data_dir: str = ""
     parameters_path: str = ""
     val_split: float = 0.2
     test_split: float = 0.1
