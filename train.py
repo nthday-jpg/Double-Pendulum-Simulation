@@ -193,6 +193,7 @@ def main():
         
         # Data
         val_split=args.val_split,
+        test_split=args.test_split,
         normalize_time=args.normalize_time,
         normalize_state=args.normalize_state,
         
@@ -251,6 +252,8 @@ def main():
         print_interval=args.print_interval,
         save_checkpoints=args.save_checkpoints,
         checkpoint_interval=args.checkpoint_interval,
+
+        test_interval=50,
         
         # Early stopping
         early_stopping_patience=args.early_stopping_patience,
