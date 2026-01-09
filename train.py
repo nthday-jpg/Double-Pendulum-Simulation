@@ -3,6 +3,7 @@ import os
 import argparse
 import warnings
 import torch
+from datetime import datetime  
 
 # Suppress warnings
 warnings.filterwarnings('ignore', category=UserWarning)
@@ -183,10 +184,13 @@ def main():
     # Parse arguments
     args = parse_args()
     
+    # Generate run_name if not provided
+    run_name = args.run_name if args.run_name else f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    
     # Configuration - pass all arguments to Config
     cfg = Config(
         # Experiment
-        run_name=args.run_name if args.run_name else None,
+        run_name=run_name,  
         seed=args.seed,
         
         # Data
