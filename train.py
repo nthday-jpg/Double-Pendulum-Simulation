@@ -48,6 +48,8 @@ def parse_args():
                         help='Directory containing trajectory files (trajectory_*.npz) and parameters (parameters_*.json)')
     parser.add_argument('--val_split', type=float, default=0.2,
                         help='Validation split ratio')
+    parser.add_argument('--test_split', type=float, default=0.1,
+                        help='Test split ratio')
     parser.add_argument('--normalize_time', action='store_true',
                         help='Normalize time to [0, 1]')
     parser.add_argument('--normalize_state', action='store_true',
