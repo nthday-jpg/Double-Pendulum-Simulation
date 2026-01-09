@@ -221,11 +221,11 @@ class Trainer:
     
     def _train_step(self, batch, total_train_loss, total_physics_loss, total_data_loss, total_samples):
         """Single training step - shared between mixed and separate modes."""
-        t, state, point_type = batch
+        t, initial_state, state, point_type = batch
         
         self.optimizer.zero_grad()
         loss, loss_dict = compute_loss(
-            self.model, (t, state, point_type),
+            self.model, (t, initial_state, state, point_type),
             weight_data=self.config.data_weight,
             weight_phys=self.config.physics_weight
         )
@@ -282,15 +282,16 @@ class Trainer:
         total_samples = 0
         
         for batch in val_loader:
-            t, state, point_type = batch
+            t, initial_state, state, point_type = batch
             t = t.to(self.device).view(-1, 1)
+            initial_state = initial_state.to(self.device)
             state = state.to(self.device)
             t = t.detach().requires_grad_(True)
 
             with torch.enable_grad():
                 with self.accelerator.autocast():
                     loss, loss_dict = compute_loss(
-                        unwrapped_model, (t, state, point_type),
+                        unwrapped_model, (t, initial_state, state, point_type),
                         weight_data=self.config.data_weight,
                         weight_phys=self.config.physics_weight
                     )

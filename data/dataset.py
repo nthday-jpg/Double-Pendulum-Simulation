@@ -11,12 +11,14 @@ class PendulumDataset(Dataset):
 
     Returns:
         t      : (1,)
+        initial_state : (4,) = [theta1_0, theta2_0, omega1_0, omega2_0]
         state  : (2,) = [theta1, theta2]
         point_type : 0 (data point)
     """
     def __init__(self, data_path, parameters_path):
         data = np.load(data_path)
         self.t = data["t"]          # (N,)
+        self.initial_state = data["initial_state"]  # (4,)
         self.q = data["q"]          # (N, 2)
 
         with open(parameters_path, "r") as f:
@@ -27,8 +29,9 @@ class PendulumDataset(Dataset):
 
     def __getitem__(self, idx):
         t = torch.tensor([self.t[idx]], dtype=torch.float32)
+        initial_state = torch.tensor(self.initial_state, dtype=torch.float32)
         state = torch.tensor(np.concatenate([self.q[idx]]), dtype=torch.float32)
-        return t, state, 0  # point_type = 0 for data
+        return t, initial_state, state, 0  # point_type = 0 for data
 
 
 class CollocationDataset(Dataset):
@@ -37,19 +40,22 @@ class CollocationDataset(Dataset):
     
     Returns:
         t      : (1,)
+        initial_state : (4,) dummy zeros
         state  : (2,) dummy zeros
         point_type : 1 (collocation point)
     """
-    def __init__(self, tmin, tmax, num_points):
+    def __init__(self, tmin, tmax, num_points, initial_state=None):
         self.t = np.random.uniform(tmin, tmax, size=(num_points, 1))
+        self.initial_state = initial_state if initial_state is not None else np.zeros(4)
 
     def __len__(self):
         return len(self.t)
 
     def __getitem__(self, idx):
         t = torch.tensor(self.t[idx], dtype=torch.float32)
+        initial_state = torch.tensor(self.initial_state, dtype=torch.float32)
         dummy_state = torch.zeros(2)
-        return t, dummy_state, 1  # point_type = 1 for collocation
+        return t, initial_state, dummy_state, 1  # point_type = 1 for collocation
 
 
 def get_dataloader(data_path, parameters_path, config: Config,
@@ -77,7 +83,10 @@ def get_dataloader(data_path, parameters_path, config: Config,
     batch_size_collocation = config.batch_size_collocation or batch_size
 
     data_dataset = PendulumDataset(data_path, parameters_path)
-    collocation_dataset = CollocationDataset(config.t_min, config.t_max, config.n_collocation)
+    
+    # Get initial state from data_dataset to use in collocation
+    initial_state_np = data_dataset.initial_state
+    collocation_dataset = CollocationDataset(config.t_min, config.t_max, config.n_collocation, initial_state_np)
 
     data_size = len(data_dataset)
     val_size = int(data_size * val_split)

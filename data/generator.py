@@ -139,7 +139,7 @@ def generate_dataset(
             print(f"  Trajectory {i:03d} ({param_str}): Energy drift = {E_rel_drift*100:.3f}%")
         
         filename = os.path.join(output_dir, f"trajectory_{i:03d}.npz")
-        np.savez(filename, t=t, q=q, qdot=qdot)
+        np.savez(filename, t=t, q=q, qdot=qdot, initial_state=initial_state)
         print(f"  Saved: {filename} and {params_filename}")
     
     print(f"\nDataset complete! Saved to {output_dir}")
@@ -149,7 +149,7 @@ def generate_dataset(
 if __name__ == "__main__":
     
     # Example 1: Generate with same parameters for all trajectories
-    generate_dataset(num_trajectories=1, num_points=3000, t_span=(5, 15))
+    generate_dataset(num_trajectories=1, num_points=4000, t_span=(0, 5))
     
     # Example 2: Generate with varied parameters for each trajectory
     # generate_dataset(num_trajectories=3, num_points=3000, t_span=(0, 10), vary_parameters=True)
