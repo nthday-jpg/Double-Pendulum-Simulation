@@ -82,6 +82,8 @@ class Config:
     print_interval: int = 10  # Print progress to console every N epochs
     save_checkpoints: bool = True
     checkpoint_interval: int = 50
+
+    test_interval: int = 50  # Evaluate on test set every N epochs
     
     # early stopping
     early_stopping_patience: int | None = None  # None = disabled, or number of epochs

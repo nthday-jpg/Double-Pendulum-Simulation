@@ -164,7 +164,9 @@ class Trainer:
                     if (epoch + 1) % print_interval == 0 or epoch == 0:
                         self._print_beautiful_log(epoch + 1, avg_train_loss, avg_physics_loss, avg_data_loss,
                                                  val_metrics)
-                
+                if (epoch + 1) % getattr(self.config, 'test_interval', 50) == 0:
+                    self.evaluate_test_set()
+
                 # Synchronize before early stopping check
                 self.accelerator.wait_for_everyone()
                 
@@ -219,7 +221,6 @@ class Trainer:
                 if hasattr(self, 'run_dir') and self.run_dir:
                     self.plot_losses(self.run_dir)
                 
-                self.evaluate_test_set()
     
     def _train_step(self, batch, total_train_loss, total_physics_loss, total_data_loss, total_samples):
         """Single training step - shared between mixed and separate modes."""
