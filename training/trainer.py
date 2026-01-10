@@ -378,7 +378,6 @@ class Trainer:
         plt.tight_layout()
         plt.savefig(plot_path, dpi=150, bbox_inches='tight')
         print(f"Loss plot saved to: {plot_path}")
-        plt.show()
         plt.close()
 
     def save_model(self, path):
