@@ -64,8 +64,8 @@ class Config:
     use_physics: bool = True
     n_collocation: int = 5000
     data_fraction: float = 0.1
-    physics_weight: float = 1.0
-    data_weight: float = 1.0
+    #physics_weight: float = 1-data_loss_ratio
+    data_loss_ratio: float = 1.0
     residual_type: str = "lagrangian"  # eom | hamiltonian | lagrangian
 
     # time domain

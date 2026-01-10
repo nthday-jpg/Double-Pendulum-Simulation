@@ -124,9 +124,7 @@ def parse_args():
                         help='Number of collocation points')
     parser.add_argument('--data_fraction', type=float, default=0.1,
                         help='Fraction of data points vs collocation')
-    parser.add_argument('--physics_weight', type=float, default=1.0,
-                        help='Weight for physics loss')
-    parser.add_argument('--data_weight', type=float, default=1.0,
+    parser.add_argument('--data_loss_ratio', type=float, default=1.0,
                         help='Weight for data loss')
     parser.add_argument('--residual_type', type=str, default='lagrangian',
                         choices=['eom', 'lagrangian', 'hamiltonian'],
@@ -234,8 +232,7 @@ def main():
         use_physics=args.use_physics,
         n_collocation=args.n_collocation,
         data_fraction=args.data_fraction,
-        physics_weight=args.physics_weight,
-        data_weight=args.data_weight,
+        data_loss_ratio=args.data_loss_ratio,
         residual_type=args.residual_type,
         
         # Time domain

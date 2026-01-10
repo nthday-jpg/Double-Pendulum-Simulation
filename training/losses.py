@@ -1,7 +1,7 @@
 import torch
 from physics.physics_loss import physics_residual, compute_derivatives
 
-def compute_loss(model, batch, weight_data=1.0, weight_phys=1.0):
+def compute_loss(model, batch, data_loss_ratio=1.0):
     t, initial_state, state, point_type = batch
     
     # Ensure t is a leaf tensor with proper shape and requires grad
@@ -44,7 +44,7 @@ def compute_loss(model, batch, weight_data=1.0, weight_phys=1.0):
         data_loss = torch.tensor(0.0, device=t.device)
 
     # ---------- Total ----------
-    total_loss = weight_phys * physics_loss + weight_data * data_loss
+    total_loss = (1 - data_loss_ratio) * physics_loss + data_loss_ratio * data_loss
 
     loss_dict = {
         "physics_loss": physics_loss.item(),

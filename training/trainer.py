@@ -231,8 +231,7 @@ class Trainer:
         self.optimizer.zero_grad()
         loss, loss_dict = compute_loss(
             self.model, (t, initial_state, state, point_type),
-            weight_data=self.config.data_weight,
-            weight_phys=self.config.physics_weight
+            data_loss_ratio=self.config.data_loss_ratio,
         )
         
         self.accelerator.backward(loss)
@@ -298,8 +297,7 @@ class Trainer:
                 with self.accelerator.autocast():
                     loss, loss_dict = compute_loss(
                         unwrapped_model, (t, initial_state, state, point_type),
-                        weight_data=self.config.data_weight,
-                        weight_phys=self.config.physics_weight
+                        data_loss_ratio=self.config.data_loss_ratio,
                     )
             
             # Extract loss values and immediately free the computation graph
