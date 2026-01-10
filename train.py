@@ -107,6 +107,8 @@ def parse_args():
     parser.add_argument('--gradient_accumulation_steps', type=int, default=1,
                         help='Gradient accumulation steps')
     
+
+
     # Model loading
     parser.add_argument('--checkpoint_path', type=str, default=None,
                         help='Path to checkpoint to resume from')
@@ -154,7 +156,9 @@ def parse_args():
                         help='Save model checkpoints')
     parser.add_argument('--checkpoint_interval', type=int, default=50,
                         help='Save checkpoint every N epochs')
-    
+    parser.add_argument('--test_interval', type=int, default=50,
+                        help='Evaluate on test set every N epochs')
+
     # Early stopping
     parser.add_argument('--early_stopping_patience', type=int, default=None,
                         help='Early stopping patience (None = disabled)')
@@ -250,7 +254,7 @@ def main():
         save_checkpoints=args.save_checkpoints,
         checkpoint_interval=args.checkpoint_interval,
 
-        test_interval=50,
+        test_interval=args.test_interval,
         
         # Early stopping
         early_stopping_patience=args.early_stopping_patience,
