@@ -288,9 +288,7 @@ class Trainer:
         
         for batch in val_loader:
             t, initial_state, state, point_type = batch
-            t = t.to(self.device).view(-1, 1)
-            initial_state = initial_state.to(self.device)
-            state = state.to(self.device)
+            t = t.view(-1, 1)
             
             # Detach and require grad for physics computation
             t = t.detach().requires_grad_(True)
@@ -313,6 +311,8 @@ class Trainer:
             
             # Explicitly delete tensors to free GPU memory
             del loss, t, initial_state, state, point_type
+        
+        if (torch.cuda.is_available()):
             torch.cuda.empty_cache()
         
         # Gather losses from all processes
@@ -410,7 +410,7 @@ class Trainer:
             unwrapped_model = self.accelerator.unwrap_model(self.model)
             unwrapped_model.load_state_dict(checkpoint['model_state_dict'])
         elif self.accelerator.is_main_process:
-            print("⚠ No checkpoint found, using current model state")
+            print("No checkpoint found, using current model state")
         
         # Set model to eval mode
         self.model.eval()
@@ -420,23 +420,24 @@ class Trainer:
             print("Evaluating test set...")
         test_metrics = self.evaluate(self.test_loader, prefix="test")
         
-        print("\nTest Set Results:")
-        print("-"*80)
-        print(f"{'Metric':<30} {'Value':<15}")
-        print("-"*80)
-        print(f"{'Total Loss':<30} {test_metrics['total_loss']:<15.6f}")
-        print(f"{'Physics Loss':<30} {test_metrics['physics_loss']:<15.6f}")
-        print(f"{'Data Loss':<30} {test_metrics['data_loss']:<15.6f}")
-        print("="*80 + "\n")
-        
-        # Save test results to file if run_dir is available
-        if hasattr(self, 'run_dir') and self.run_dir:
-            test_results_file = os.path.join(self.run_dir, "test_results.txt")
-            with open(test_results_file, 'w') as f:
-                f.write("Test Set Evaluation Results\n")
-                f.write("="*80 + "\n")
-                f.write(f"Total Loss:    {test_metrics['total_loss']:.6f}\n")
-                f.write(f"Physics Loss:  {test_metrics['physics_loss']:.6f}\n")
-                f.write(f"Data Loss:     {test_metrics['data_loss']:.6f}\n")
-                f.write("="*80 + "\n")
-            print(f"Test results saved to: {test_results_file}")
+        if (self.accelerator.is_main_process):
+            print("\nTest Set Results:")
+            print("-"*80)
+            print(f"{'Metric':<30} {'Value':<15}")
+            print("-"*80)
+            print(f"{'Total Loss':<30} {test_metrics['total_loss']:<15.6f}")
+            print(f"{'Physics Loss':<30} {test_metrics['physics_loss']:<15.6f}")
+            print(f"{'Data Loss':<30} {test_metrics['data_loss']:<15.6f}")
+            print("="*80 + "\n")
+            
+            # Save test results to file if run_dir is available
+            if hasattr(self, 'run_dir') and self.run_dir:
+                test_results_file = os.path.join(self.run_dir, "test_results.txt")
+                with open(test_results_file, 'w') as f:
+                    f.write("Test Set Evaluation Results\n")
+                    f.write("="*80 + "\n")
+                    f.write(f"Total Loss:    {test_metrics['total_loss']:.6f}\n")
+                    f.write(f"Physics Loss:  {test_metrics['physics_loss']:.6f}\n")
+                    f.write(f"Data Loss:     {test_metrics['data_loss']:.6f}\n")
+                    f.write("="*80 + "\n")
+                print(f"Test results saved to: {test_results_file}")
