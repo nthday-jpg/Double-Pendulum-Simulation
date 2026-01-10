@@ -290,8 +290,11 @@ class Trainer:
             t = t.to(self.device).view(-1, 1)
             initial_state = initial_state.to(self.device)
             state = state.to(self.device)
+            
+            # Detach and require grad for physics computation
             t = t.detach().requires_grad_(True)
-
+            
+            # Enable gradients only for this batch computation
             with torch.enable_grad():
                 with self.accelerator.autocast():
                     loss, loss_dict = compute_loss(
@@ -300,11 +303,16 @@ class Trainer:
                         weight_phys=self.config.physics_weight
                     )
             
+            # Extract loss values and immediately free the computation graph
             batch_size = t.size(0)
             total_loss += loss.item() * batch_size
             total_physics_loss += loss_dict["physics_loss"] * batch_size
             total_data_loss += loss_dict["data_loss"] * batch_size
             total_samples += batch_size
+            
+            # Explicitly delete tensors to free GPU memory
+            del loss, t, initial_state, state, point_type
+            torch.cuda.empty_cache()
         
         # Gather losses from all processes
         total_loss = torch.tensor(total_loss, device=self.device)
@@ -393,11 +401,22 @@ class Trainer:
         # Load best model if available
         if self.best_model_path and os.path.exists(self.best_model_path):
             print(f"Loading best model from: {self.best_model_path}")
+            # Synchronize before loading
+            self.accelerator.wait_for_everyone()
+            
             checkpoint = torch.load(self.best_model_path, map_location=self.device)
             unwrapped_model = self.accelerator.unwrap_model(self.model)
             unwrapped_model.load_state_dict(checkpoint['model_state_dict'])
+            unwrapped_model.eval()  # Ensure eval mode
+            
+            # Synchronize after loading to ensure all processes have loaded
+            self.accelerator.wait_for_everyone()
+        
+        # Ensure model is in eval mode
+        self.model.eval()
         
         # Evaluate using same method as validation
+        print("Evaluating test set...")
         test_metrics = self.evaluate(self.test_loader, prefix="test")
         
         print("\nTest Set Results:")
