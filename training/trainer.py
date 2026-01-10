@@ -45,7 +45,8 @@ class Trainer:
         self.device = self.accelerator.device
 
         self.best_val_loss = float('inf')
-        self.best_model_path = None
+        # Initialize on all processes to avoid None causing deadlocks
+        self.best_model_path = ""
         self.patience_counter = 0
         
         # Check and load checkpoint if provided
@@ -80,7 +81,7 @@ class Trainer:
         else:
             writer, csv_file, tb, run_dir = None, None, None, None
             self.run_dir = None
-            self.best_model_path = None
+            self.best_model_path = ""
         
         self.accelerator.wait_for_everyone()
         
@@ -150,15 +151,15 @@ class Trainer:
                             "val_data": val_metrics["data_loss"]
                         }
                         
-                        writer.writerow(log_dict)
-                        csv_file.flush()
+                        writer.writerow(log_dict) # type: ignore
+                        csv_file.flush() # type: ignore
                         
-                        tb.add_scalar("Loss/Train", avg_train_loss, epoch + 1)
-                        tb.add_scalar("Loss/Train_Physics", avg_physics_loss, epoch + 1)
-                        tb.add_scalar("Loss/Train_Data", avg_data_loss, epoch + 1)
-                        tb.add_scalar("Loss/Val", avg_val_loss, epoch + 1)
-                        tb.add_scalar("Loss/Val_Physics", val_metrics["physics_loss"], epoch + 1)
-                        tb.add_scalar("Loss/Val_Data", val_metrics["data_loss"], epoch + 1)
+                        tb.add_scalar("Loss/Train", avg_train_loss, epoch + 1) # type: ignore
+                        tb.add_scalar("Loss/Train_Physics", avg_physics_loss, epoch + 1) # type: ignore
+                        tb.add_scalar("Loss/Train_Data", avg_data_loss, epoch + 1) # type: ignore
+                        tb.add_scalar("Loss/Val", avg_val_loss, epoch + 1)  # type: ignore
+                        tb.add_scalar("Loss/Val_Physics", val_metrics["physics_loss"], epoch + 1) # type: ignore
+                        tb.add_scalar("Loss/Val_Data", val_metrics["data_loss"], epoch + 1) # type: ignore
                     
                     print_interval = getattr(self.config, 'print_interval', 10)
                     if (epoch + 1) % print_interval == 0 or epoch == 0:
@@ -389,34 +390,34 @@ class Trainer:
         unwrapped_model.load_state_dict(torch.load(path, map_location=self.device))
     
     def evaluate_test_set(self):
-        """Evaluate the model on test set (temporal extrapolation) using same evaluation as validation."""
-        if self.test_loader is None:
-            print("⚠ No test loader available for evaluation")
-            return
+        """Evaluate the model on test set (temporal extrapolation)."""
         
-        print("\n" + "="*80)
-        print("Evaluating on Test Set (Temporal Extrapolation)")
-        print("="*80)
+        if self.accelerator.is_main_process:
+            print("\n" + "="*80)
+            print("Evaluating on Test Set (Temporal Extrapolation)")
+            print("="*80)
         
-        # Load best model if available
+        # Clear GPU cache before test evaluation
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
+        # ALL processes load the checkpoint independently (simple and safe)
         if self.best_model_path and os.path.exists(self.best_model_path):
-            print(f"Loading best model from: {self.best_model_path}")
-            # Synchronize before loading
-            self.accelerator.wait_for_everyone()
+            if self.accelerator.is_main_process:
+                print(f"Loading best model from: {self.best_model_path}")
             
             checkpoint = torch.load(self.best_model_path, map_location=self.device)
             unwrapped_model = self.accelerator.unwrap_model(self.model)
             unwrapped_model.load_state_dict(checkpoint['model_state_dict'])
-            unwrapped_model.eval()  # Ensure eval mode
-            
-            # Synchronize after loading to ensure all processes have loaded
-            self.accelerator.wait_for_everyone()
+        elif self.accelerator.is_main_process:
+            print("⚠ No checkpoint found, using current model state")
         
-        # Ensure model is in eval mode
+        # Set model to eval mode
         self.model.eval()
         
         # Evaluate using same method as validation
-        print("Evaluating test set...")
+        if self.accelerator.is_main_process:
+            print("Evaluating test set...")
         test_metrics = self.evaluate(self.test_loader, prefix="test")
         
         print("\nTest Set Results:")
