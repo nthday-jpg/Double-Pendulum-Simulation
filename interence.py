@@ -48,24 +48,28 @@ def simulate_with_pinn(model, initial_state, t_span, num_points, device='cpu'):
     
     # Create time points
     t = np.linspace(t_span[0], t_span[1], num_points)
-    t_tensor = torch.tensor(t, dtype=torch.float32).unsqueeze(1).to(device)
+    t_tensor = torch.tensor(t, dtype=torch.float32).unsqueeze(1).to(device)  # (num_points, 1)
+    
+    # Prepare initial state tensor - repeat for all time points
+    initial_state_tensor = torch.tensor(initial_state, dtype=torch.float32).unsqueeze(0).to(device)  # (1, 4)
+    initial_state_batch = initial_state_tensor.repeat(num_points, 1)  # (num_points, 4)
     
     # Get predictions from model
     with torch.no_grad():
-        # Model takes time as input and predicts state
-        predictions = model(t_tensor).cpu().numpy()
+        predictions = model(t_tensor, initial_state_batch).cpu().numpy()
     
     # Extract positions and velocities
-    # Assuming model outputs [theta1, theta2, omega1, omega2]
-    if predictions.shape[1] >= 4:
-        q = predictions[:, :2]      # [theta1, theta2]
-        qdot = predictions[:, 2:4]  # [omega1, omega2]
+    # Model outputs [theta1, theta2] only (positions)
+    if predictions.shape[1] == 2:
+        q = predictions  # (num_points, 2)
+        # Compute velocities numerically from positions
+        qdot = np.gradient(q, t, axis=0)  # (num_points, 2)
+    elif predictions.shape[1] >= 4:
+        # If model outputs [theta1, theta2, omega1, omega2]
+        q = predictions[:, :2]  # (num_points, 2)
+        qdot = predictions[:, 2:4]  # (num_points, 2)
     else:
-        # If model only predicts positions
-        q = predictions[:, :2]
-        # Compute velocities numerically
-        dt = (t_span[1] - t_span[0]) / (num_points - 1)
-        qdot = np.gradient(q, dt, axis=0)
+        raise ValueError(f"Unexpected prediction shape: {predictions.shape}")
     
     return t, q, qdot
 
