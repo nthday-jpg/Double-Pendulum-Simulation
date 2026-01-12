@@ -16,12 +16,14 @@ class PendulumDataset(Dataset):
         state  : (2,) = [theta1, theta2]
         point_type : 0 (data point)
     """
-    def __init__(self, data_dir):
+    def __init__(self, data_dir, normalize_time=True):
         """
         Args:
             data_dir: Directory containing trajectory files (trajectory_000.npz, trajectory_001.npz, ...)
                      and corresponding parameter files (parameters_000.json, parameters_001.json, ...)
         """
+        self.normalize_time = normalize_time
+
         # Load all trajectory files
         self.trajectories = []
         self.trajectory_lengths = []
@@ -58,6 +60,12 @@ class PendulumDataset(Dataset):
                 raise FileNotFoundError(f"Parameter file not found: {params_file}")
         
         self.total_length = self.cumulative_lengths[-1]
+
+        if self.normalize_time:
+            all_t = np.concatenate([traj['t'] for traj in self.trajectories])
+            self.t_max = all_t.max()
+        else:
+            self.t_max = 1.0
         
         # Check if all parameters are the same
         all_same = all(p == self.parameters_list[0] for p in self.parameters_list)
@@ -80,7 +88,12 @@ class PendulumDataset(Dataset):
         
         # Get data from the appropriate trajectory
         traj = self.trajectories[traj_idx]
-        t = torch.tensor([traj['t'][local_idx]], dtype=torch.float32)
+        t_raw = torch.tensor([traj['t'][local_idx]], dtype=torch.float32)
+        if self.normalize_time:
+            # 
+            t = t_raw / self.t_max
+        else:
+            t = t_raw
         initial_state = torch.tensor(traj['initial_state'], dtype=torch.float32)
         state = torch.tensor(np.concatenate([traj['q'][local_idx]]), dtype=torch.float32)
         return t, initial_state, state, 0  # point_type = 0 for data
@@ -97,7 +110,8 @@ class CollocationDataset(Dataset):
         state  : (2,) dummy zeros
         point_type : 1 (collocation point)
     """
-    def __init__(self, tmin, tmax, num_points, initial_states=None):
+    def __init__(self, tmin, tmax, num_points, initial_states=None, 
+                 normalize_time=True, t_max_global=1.0):
         """
         Args:
             tmin: Minimum time
@@ -105,7 +119,11 @@ class CollocationDataset(Dataset):
             num_points: Number of collocation points
             initial_states: List of initial states (4,) from all trajectories, or None for zeros
         """
-        self.t = np.random.uniform(tmin, tmax, size=(num_points, 1))
+        self.t_raw = np.random.uniform(tmin, tmax, size=(num_points, 1))
+        if normalize_time:
+            self.t = self.t_raw / t_max_global
+        else:
+            self.t = self.t_raw
         self.initial_states = initial_states if initial_states is not None else [np.zeros(4)]
         # Randomly assign an initial state to each collocation point
         self.assigned_initial_states = np.array([
@@ -151,7 +169,7 @@ def get_dataloader(data_dir, config,
     batch_size = config.batch_size
     batch_size_collocation = config.batch_size_collocation or batch_size
 
-    data_dataset = PendulumDataset(data_dir)
+    data_dataset = PendulumDataset(data_dir, normalize_time=config.normalize_time)
 
     train_val_indices = []
     test_indices = []
@@ -183,8 +201,11 @@ def get_dataloader(data_dir, config,
     
     # Get all initial states for collocation (from all trajectories)
     initial_states_np = [traj['initial_state'] for traj in data_dataset.trajectories]
+    t_max = data_dataset.t_max if config.normalize_time else 1.0
     collocation_dataset = CollocationDataset(config.t_min, config.t_max, 
-                                            config.n_collocation, initial_states_np)
+                                            config.n_collocation, initial_states_np,
+                                            normalize_time=config.normalize_time,
+                                            t_max_global=t_max)
     
     # Import seed_worker for DataLoader workers
     from utils.seed import seed_worker
