@@ -30,14 +30,14 @@ def init_run(cfg: Config):
     print(f"📊 Logging to: {run_dir}")
     return writer, csv_file, tb, run_dir
 
-def save_checkpoint(model, optimizer, cfg, run_dir, epoch, is_best=False, save_frequency=100):
+def save_checkpoint(model, optimizer, cfg, run_dir, epoch, is_best=False, best_val_loss=None, save_frequency=100):
     """Save model checkpoint with config, training state, and normalization parameters."""
     checkpoint = {
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'config': vars(cfg),  # Save config as dict
-        # Save normalization parameters for inference
+        'best_val_loss': best_val_loss or float('inf'),
         'normalize_time': getattr(cfg, 'normalize_time', True),
         'normalize_angles': getattr(cfg, 'normalize_angles', True),
         't_min': getattr(cfg, 't_min', 0.0),

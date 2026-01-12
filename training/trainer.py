@@ -258,7 +258,7 @@ class Trainer:
                 if self.accelerator.is_main_process and self.best_model_path and hasattr(self, 'run_dir') and self.run_dir:
                     unwrapped_model = self.accelerator.unwrap_model(self.model)
                     save_checkpoint(unwrapped_model, self.optimizer, self.config, 
-                                   self.run_dir, epoch + 1, is_best=True)
+                                   self.run_dir, epoch + 1, is_best=True, best_val_loss=val_loss)
                     print(f"  → New best model saved (val_loss: {val_loss:.6f})")
             return False
         
@@ -268,7 +268,7 @@ class Trainer:
             if self.accelerator.is_main_process and self.best_model_path and hasattr(self, 'run_dir') and self.run_dir:
                 unwrapped_model = self.accelerator.unwrap_model(self.model)
                 save_checkpoint(unwrapped_model, self.optimizer, self.config, 
-                               self.run_dir, epoch + 1, is_best=True)
+                               self.run_dir, epoch + 1, is_best=True, best_val_loss=val_loss)
                 print(f"  → New best model saved (val_loss: {val_loss:.6f})")
         else:
             self.patience_counter += 1
