@@ -1,7 +1,7 @@
 import torch
 from physics.physics_loss import physics_residual, compute_derivatives
 
-def compute_loss(model, batch, data_loss_ratio=1.0):
+def compute_loss(model, batch, data_loss_ratio=1.0, normalize=True):
     t, initial_state, state, point_type = batch
     
     # Ensure t is a leaf tensor with proper shape and requires grad
@@ -30,7 +30,7 @@ def compute_loss(model, batch, data_loss_ratio=1.0):
         'g': 9.81
     }
 
-    residual = physics_residual(q_pred, qdot_pred, qdd_pred, parameters)
+    residual = physics_residual(q_pred, qdot_pred, qdd_pred, parameters, normalize=normalize)
     physics_loss = torch.mean(residual**2)
 
     # ---------- Data loss (data points only) ----------

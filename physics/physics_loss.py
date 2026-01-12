@@ -49,7 +49,7 @@ def compute_derivatives(q, t):
             
     return qdot, qdd
 
-def physics_residual(q, qdot, qdd, parameters):
+def physics_residual(q, qdot, qdd, parameters, normalize=True):
     """
         Computes the physics residual for the double pendulum dynamics
         given q, qdot, qdd.
@@ -74,4 +74,15 @@ def physics_residual(q, qdot, qdd, parameters):
 
     residual = M @ qdd.unsqueeze(-1) + C.unsqueeze(-1)
     residual = residual.squeeze(-1)  # (N, 2)
+
+    if normalize:
+        scale_0 = (m1 + m2) * l1 * l1 * g
+        scale_1 = m2 * l2 * l2 * g
+        
+        scale_0 = torch.clamp(scale_0, min=1e-8)
+        scale_1 = torch.clamp(scale_1, min=1e-8)
+        
+        residual[:, 0] = residual[:, 0] / scale_0
+        residual[:, 1] = residual[:, 1] / scale_1
+        
     return residual
