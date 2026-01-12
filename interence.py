@@ -3,6 +3,7 @@ import numpy as np
 import os
 import json
 import argparse
+import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 from models.pinn import PINN
 from physics.equations import double_pendulum_derivatives, compute_energy
@@ -137,6 +138,71 @@ def save_trajectory(output_dir, t, q, qdot, prefix="trajectory", parameters=None
         print(f"Saved parameters: {params_filename}")
 
 
+def plot_comparison(t_true, q_true, qdot_true, t_pred, q_pred, qdot_pred, output_dir):
+    """
+    Plot comparison between ground truth and prediction.
+    Creates 4 subplots: theta1, theta2, omega1, omega2.
+    
+    Args:
+        t_true: Time array for ground truth
+        q_true: Position array (N, 2) for ground truth [theta1, theta2]
+        qdot_true: Velocity array (N, 2) for ground truth [omega1, omega2]
+        t_pred: Time array for predictions
+        q_pred: Position array (N, 2) for predictions [theta1, theta2]
+        qdot_pred: Velocity array (N, 2) for predictions [omega1, omega2]
+        output_dir: Directory to save plot
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+    fig.suptitle('PINN Predictions vs Ground Truth', fontsize=16, fontweight='bold')
+    
+    # Plot theta1
+    axes[0, 0].plot(t_true, q_true[:, 0], 'b-', linewidth=2, label='Ground Truth', alpha=0.8)
+    axes[0, 0].plot(t_pred, q_pred[:, 0], 'r--', linewidth=2, label='PINN Prediction', alpha=0.8)
+    axes[0, 0].set_xlabel('Time (s)', fontsize=12)
+    axes[0, 0].set_ylabel('θ₁ (rad)', fontsize=12)
+    axes[0, 0].set_title('Angle θ₁ vs Time', fontsize=13, fontweight='bold')
+    axes[0, 0].legend(fontsize=11)
+    axes[0, 0].grid(True, alpha=0.3)
+    
+    # Plot theta2
+    axes[0, 1].plot(t_true, q_true[:, 1], 'b-', linewidth=2, label='Ground Truth', alpha=0.8)
+    axes[0, 1].plot(t_pred, q_pred[:, 1], 'r--', linewidth=2, label='PINN Prediction', alpha=0.8)
+    axes[0, 1].set_xlabel('Time (s)', fontsize=12)
+    axes[0, 1].set_ylabel('θ₂ (rad)', fontsize=12)
+    axes[0, 1].set_title('Angle θ₂ vs Time', fontsize=13, fontweight='bold')
+    axes[0, 1].legend(fontsize=11)
+    axes[0, 1].grid(True, alpha=0.3)
+    
+    # Plot omega1
+    axes[1, 0].plot(t_true, qdot_true[:, 0], 'b-', linewidth=2, label='Ground Truth', alpha=0.8)
+    axes[1, 0].plot(t_pred, qdot_pred[:, 0], 'r--', linewidth=2, label='PINN Prediction', alpha=0.8)
+    axes[1, 0].set_xlabel('Time (s)', fontsize=12)
+    axes[1, 0].set_ylabel('ω₁ (rad/s)', fontsize=12)
+    axes[1, 0].set_title('Angular Velocity ω₁ vs Time', fontsize=13, fontweight='bold')
+    axes[1, 0].legend(fontsize=11)
+    axes[1, 0].grid(True, alpha=0.3)
+    
+    # Plot omega2
+    axes[1, 1].plot(t_true, qdot_true[:, 1], 'b-', linewidth=2, label='Ground Truth', alpha=0.8)
+    axes[1, 1].plot(t_pred, qdot_pred[:, 1], 'r--', linewidth=2, label='PINN Prediction', alpha=0.8)
+    axes[1, 1].set_xlabel('Time (s)', fontsize=12)
+    axes[1, 1].set_ylabel('ω₂ (rad/s)', fontsize=12)
+    axes[1, 1].set_title('Angular Velocity ω₂ vs Time', fontsize=13, fontweight='bold')
+    axes[1, 1].legend(fontsize=11)
+    axes[1, 1].grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    # Save plot
+    os.makedirs(output_dir, exist_ok=True)
+    plot_path = os.path.join(output_dir, "comparison_plot.png")
+    plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+    print(f"Comparison plot saved to: {plot_path}")
+    plt.close()
+    
+    return plot_path
+
+
 def compute_metrics(q_true, q_pred, qdot_true=None, qdot_pred=None):
     """Compute error metrics between true and predicted trajectories."""
     metrics = {}
@@ -223,6 +289,10 @@ def run_inference(checkpoint_path, initial_state=None, t_span=(0, 10), num_point
         # Save ground truth
         save_trajectory(output_dir, t_true, q_true, qdot_true,
                        prefix="trajectory_true", parameters=parameters)
+        
+        # Plot comparison
+        print("\nGenerating comparison plots...")
+        plot_comparison(t_true, q_true, qdot_true, t_pred, q_pred, qdot_pred, output_dir)
         
         # Compute metrics
         print("\nComputing metrics...")
