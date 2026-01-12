@@ -2,6 +2,7 @@
 import os
 import csv
 import yaml
+import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 import torch
 from utils.config import Config
@@ -30,12 +31,19 @@ def init_run(cfg: Config):
     return writer, csv_file, tb, run_dir
 
 def save_checkpoint(model, optimizer, cfg, run_dir, epoch, is_best=False, save_frequency=100):
-    """Save model checkpoint with config and training state."""
+    """Save model checkpoint with config, training state, and normalization parameters."""
     checkpoint = {
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'config': vars(cfg),  # Save config as dict
+        # Save normalization parameters for inference
+        'normalize_time': getattr(cfg, 'normalize_time', True),
+        'normalize_angles': getattr(cfg, 'normalize_angles', True),
+        't_min': getattr(cfg, 't_min', 0.0),
+        't_max': getattr(cfg, 't_max', 1.0),
+        'theta_min': getattr(cfg, 'theta_min', -np.pi),
+        'theta_max': getattr(cfg, 'theta_max', np.pi),
     }
     
     # Ensure checkpoints directory exists
