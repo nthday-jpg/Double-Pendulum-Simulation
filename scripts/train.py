@@ -52,8 +52,6 @@ def parse_args():
                         help='Test split ratio')
     parser.add_argument('--normalize_time', action='store_true',
                         help='Normalize time to [0, 1]')
-    parser.add_argument('--normalize_state', action='store_true',
-                        help='Normalize state variables')
     
     # Model architecture
     parser.add_argument('--model', type=str, default='pinn',
@@ -186,7 +184,6 @@ def main():
         val_split=args.val_split,
         test_split=args.test_split,
         normalize_time=args.normalize_time,
-        normalize_state=args.normalize_state,
         
         # Model architecture
         model=args.model,
