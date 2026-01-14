@@ -15,7 +15,7 @@ def compute_derivatives(q, t):
             grad_outputs=torch.ones_like(q[:, i]),
             create_graph=True,   # Essential for computing 2nd derivative
             retain_graph=True,   # Keeps graph alive for the next loop iteration
-            allow_unused=True
+            allow_unused=False
         )[0]
         
         if grad_i is None:
@@ -36,7 +36,7 @@ def compute_derivatives(q, t):
             grad_outputs=torch.ones_like(qdot[:, i]),
             create_graph=True,
             retain_graph=True,
-            allow_unused=True
+            allow_unused=False
         )[0]
         
         if grad_2_i is None:
