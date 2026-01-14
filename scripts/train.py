@@ -252,7 +252,8 @@ def main():
     
     # Set seed for reproducibility
     set_seed(cfg.seed)
-    print(f"🌱 Random seed set to: {cfg.seed}")
+    print(f"Random seed set to: {cfg.seed}")
+    print(f"Run name: {cfg.run_name}")
     
     # Initialize model
     model = PINN(cfg)
