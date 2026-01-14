@@ -15,14 +15,18 @@ def compute_derivatives(q, t):
             grad_outputs=torch.ones_like(q[:, i]),
             create_graph=True,   # Essential for computing 2nd derivative
             retain_graph=True,   # Keeps graph alive for the next loop iteration
-            allow_unused=False
         )[0]
+
+        #equivalent to:
+        # grad_i = torch.autograd.grad(
+        #     outputs=q[:, i].sum(),
+        #     inputs=t,
+        #     create_graph=True,
+        #     retain_graph=True,
+        # )[0]
         
-        if grad_i is None:
-            # Handle cases where a coordinate might not depend on t
-            qdot_list.append(torch.zeros_like(t))
-        else:
-            qdot_list.append(grad_i)
+        # No need to check for None since allow_unused=False will raise an error
+        qdot_list.append(grad_i)
     
     # Create qdot from the list (preserves the graph history)
     qdot = torch.cat(qdot_list, dim=1) 
@@ -36,13 +40,10 @@ def compute_derivatives(q, t):
             grad_outputs=torch.ones_like(qdot[:, i]),
             create_graph=True,
             retain_graph=True,
-            allow_unused=False
         )[0]
         
-        if grad_2_i is None:
-            qdd_list.append(torch.zeros_like(t))
-        else:
-            qdd_list.append(grad_2_i)
+        # No need to check for None since allow_unused=False will raise an error
+        qdd_list.append(grad_2_i)
             
     # Create qdd from the list
     qdd = torch.cat(qdd_list, dim=1)
