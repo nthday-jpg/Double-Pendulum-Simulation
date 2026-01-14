@@ -30,20 +30,19 @@ def init_run(cfg: Config):
     print(f"📊 Logging to: {run_dir}")
     return writer, csv_file, tb, run_dir
 
-def save_checkpoint(model, optimizer, cfg, run_dir, epoch, is_best=False, best_val_loss=None, save_frequency=100):
-    """Save model checkpoint with config, training state, and normalization parameters."""
+def save_checkpoint(model, optimizer, cfg, run_dir, epoch, is_best=False, best_val_loss=None, save_frequency=100, t_max_dataset=None):
+    """Save model checkpoint with config, training state, and dataset normalization parameters.
+    
+    Args:
+        t_max_dataset: Actual t_max from training dataset (for proper inference normalization)
+    """
     checkpoint = {
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
-        'config': vars(cfg),  # Save config as dict
-        'best_val_loss': best_val_loss or float('inf'),
-        'normalize_time': getattr(cfg, 'normalize_time', True),
-        'normalize_angles': getattr(cfg, 'normalize_angles', True),
-        't_min': getattr(cfg, 't_min', 0.0),
-        't_max': getattr(cfg, 't_max', 1.0),
-        'theta_min': getattr(cfg, 'theta_min', -np.pi),
-        'theta_max': getattr(cfg, 'theta_max', np.pi),
+        'config': vars(cfg),  # Config contains all settings including normalize_time, t_min, t_max, etc.
+        'best_val_loss': best_val_loss if best_val_loss is not None else float('inf'),
+        't_max_dataset': t_max_dataset if t_max_dataset is not None else getattr(cfg, 't_max', 1.0),  # Actual dataset max time
     }
     
     # Ensure checkpoints directory exists

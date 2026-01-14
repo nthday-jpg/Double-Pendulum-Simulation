@@ -132,11 +132,6 @@ def parse_args():
                         choices=['eom', 'lagrangian', 'hamiltonian'],
                         help='Type of physics residual')
     
-    # Time domain
-    parser.add_argument('--t_min', type=float, default=0.0,
-                        help='Minimum time')
-    parser.add_argument('--t_max', type=float, default=5.0,
-                        help='Maximum time')
     parser.add_argument('--collocation_sampling', type=str, default='uniform',
                         choices=['uniform', 'random', 'latin_hypercube'],
                         help='Collocation sampling strategy')
@@ -240,8 +235,6 @@ def main():
         residual_type=args.residual_type,
         
         # Time domain
-        t_min=args.t_min,
-        t_max=args.t_max,
         collocation_sampling=args.collocation_sampling,
         
         # Rollout evaluation

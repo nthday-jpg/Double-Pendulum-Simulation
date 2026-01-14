@@ -201,11 +201,21 @@ def get_dataloader(data_dir, config,
     
     # Get all initial states for collocation (from all trajectories)
     initial_states_np = [traj['initial_state'] for traj in data_dataset.trajectories]
-    t_max = data_dataset.t_max if config.normalize_time else 1.0
-    collocation_dataset = CollocationDataset(config.t_min, config.t_max, 
+    
+    # Get actual time range from dataset
+    t_min_data = min(traj['t'].min() for traj in data_dataset.trajectories)
+    t_max_data = data_dataset.t_max  # Already computed from all trajectories
+    
+    # Store actual dataset time range in config for checkpoint saving
+    config.t_max_dataset = t_max_data
+    
+    # Use actual data time range for collocation (not config defaults!)
+    # This ensures collocation points cover the same domain as training data
+    t_max_for_norm = t_max_data if config.normalize_time else 1.0
+    collocation_dataset = CollocationDataset(t_min_data, t_max_data,  # Use actual data range
                                             config.n_collocation, initial_states_np,
                                             normalize_time=config.normalize_time,
-                                            t_max_global=t_max)
+                                            t_max_global=t_max_for_norm)
     
     # Import seed_worker for DataLoader workers
     from utils.seed import seed_worker

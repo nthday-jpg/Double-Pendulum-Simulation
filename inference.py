@@ -27,22 +27,18 @@ def load_model(checkpoint_path, device='cpu'):
     model.eval()
     
     # Extract normalization parameters from checkpoint
+    # Use t_max_dataset (actual training data range) for proper normalization
     normalization_params = {
-        'normalize_time': checkpoint.get('normalize_time', getattr(cfg, 'normalize_time', True)),
-        'normalize_angles': checkpoint.get('normalize_angles', getattr(cfg, 'normalize_angles', True)),
-        't_min': checkpoint.get('t_min', 0.0),
-        't_max': checkpoint.get('t_max', 1.0),
-        'theta_min': checkpoint.get('theta_min', -np.pi),
-        'theta_max': checkpoint.get('theta_max', np.pi),
+        'normalize_time': cfg.normalize_time,
+        't_max': checkpoint.get('t_max_dataset', 1.0),  # Use actual dataset max time
     }
     
     return model, cfg, normalization_params
 
 
 def simulate_with_pinn(model, initial_state, t_span, num_points, 
-                       normalize_time=True, normalize_angles=True,
-                       t_min=0.0, t_max=1.0, 
-                       theta_min=-np.pi, theta_max=np.pi,
+                       normalize_time=True,
+                       t_max=1.0, 
                        device='cpu'):
     """
     Simulate double pendulum trajectory using trained PINN model.
@@ -54,9 +50,7 @@ def simulate_with_pinn(model, initial_state, t_span, num_points,
         t_span: (t_start, t_end) in PHYSICAL units
         num_points: Number of time points
         normalize_time: Whether time was normalized during training
-        normalize_angles: Whether angles were normalized during training
-        t_min, t_max: Global time normalization params from training dataset
-        theta_min, theta_max: Angle normalization params (default: [-π, π])
+        t_max: Max time from training dataset (for normalization)
         device: Device to run on
         
     Returns:
@@ -69,63 +63,39 @@ def simulate_with_pinn(model, initial_state, t_span, num_points,
     # Create time points in physical units
     t = np.linspace(t_span[0], t_span[1], num_points)
     
-    # Normalize time if needed (SAME AS DATASET!)
+    # Normalize time using TRAINING dataset range (same normalization as during training)
+    # Model was trained with t normalized by t_max_dataset, so we must use the same normalization
+    # Dataset normalizes as: t_normalized = t / t_max_dataset
     if normalize_time:
-        t_norm = (t - t_min) / (t_max - t_min)  # → [0, 1]
+        t_norm = t / t_max  # Use same normalization as training dataset
         t_tensor = torch.tensor(t_norm, dtype=torch.float32).unsqueeze(1).to(device)
     else:
         t_tensor = torch.tensor(t, dtype=torch.float32).unsqueeze(1).to(device)
     
-    # Normalize initial state if needed (SAME AS DATASET!)
-    initial_state_copy = np.array(initial_state, dtype=np.float32).copy()
-    if normalize_angles:
-        # Normalize angles: [-π, π] → [0, 1] → [-1, 1]
-        initial_state_copy[:2] = (initial_state_copy[:2] - theta_min) / (theta_max - theta_min)
-        initial_state_copy[:2] = 2 * initial_state_copy[:2] - 1  # [0,1] → [-1,1]
-        # Note: omegas are kept as-is for now (TODO: add omega normalization if dataset uses it)
-    
     # Prepare initial state tensor - repeat for all time points
-    initial_state_tensor = torch.tensor(initial_state_copy, dtype=torch.float32).unsqueeze(0).to(device)
+    initial_state_tensor = torch.tensor(initial_state, dtype=torch.float32).unsqueeze(0).to(device)
     initial_state_batch = initial_state_tensor.repeat(num_points, 1)
     
+    t_tensor.requires_grad_(True)
     # Concatenate time and initial state: [t, theta1_0, theta2_0, omega1_0, omega2_0]
     x = torch.cat([t_tensor, initial_state_batch], dim=1)
     
-    # Get predictions from model (in normalized space)
-    with torch.no_grad():
-        predictions = model(x).cpu().numpy()
-    
-    # Denormalize predictions to physical units
-    if predictions.shape[1] == 2:
-        q_norm = predictions  # (num_points, 2)
-        
-        if normalize_angles:
-            # Denormalize: [-1, 1] → [0, 1] → [-π, π]
-            q = (q_norm + 1) / 2  # [-1,1] → [0,1]
-            q = q * (theta_max - theta_min) + theta_min  # [0,1] → [-π, π]
-        else:
-            q = q_norm
-        
-        # Compute velocities from denormalized positions using PHYSICAL time
-        qdot = np.gradient(q, t, axis=0)
-        
-    elif predictions.shape[1] >= 4:
-        # If model outputs [theta1, theta2, omega1, omega2]
-        q_norm = predictions[:, :2]
-        qdot_norm = predictions[:, 2:4]
-        
-        if normalize_angles:
-            # Denormalize positions
-            q = (q_norm + 1) / 2
-            q = q * (theta_max - theta_min) + theta_min
-            # TODO: Denormalize velocities if they were normalized
-            qdot = qdot_norm
-        else:
-            q = q_norm
-            qdot = qdot_norm
-    else:
-        raise ValueError(f"Unexpected prediction shape: {predictions.shape}")
-    
+    with torch.enable_grad():
+        q = model(x)
+        qdot = []
+        for i in range(2):
+            grad_i = torch.autograd.grad(
+                outputs=q[:, i].sum(),
+                inputs=t_tensor,
+                create_graph=False,
+                retain_graph=True,
+            )[0]
+            qdot.append(grad_i)
+
+        qdot = torch.cat(qdot, dim=1)
+
+    q = q.detach().cpu().numpy()
+    qdot = qdot.detach().cpu().numpy()
     return t, q, qdot
 
 
@@ -325,8 +295,7 @@ def run_inference(checkpoint_path, initial_state=None, t_span=(0, 10), num_point
     model, cfg, norm_params = load_model(checkpoint_path, device)
     
     print(f"Normalization settings:")
-    print(f"  Time: {norm_params['normalize_time']} | Range: [{norm_params['t_min']:.3f}, {norm_params['t_max']:.3f}]")
-    print(f"  Angles: {norm_params['normalize_angles']} | Range: [{norm_params['theta_min']:.3f}, {norm_params['theta_max']:.3f}]")
+    print(f"  Time: {norm_params['normalize_time']} | t_max (from training data): {norm_params['t_max']:.3f}")
     
     print(f"\nInitial state: theta1={initial_state[0]:.3f}, theta2={initial_state[1]:.3f}, "
           f"omega1={initial_state[2]:.3f}, omega2={initial_state[3]:.3f}")
@@ -337,11 +306,7 @@ def run_inference(checkpoint_path, initial_state=None, t_span=(0, 10), num_point
     t_pred, q_pred, qdot_pred = simulate_with_pinn(
         model, initial_state, t_span, num_points,
         normalize_time=norm_params['normalize_time'],
-        normalize_angles=norm_params['normalize_angles'],
-        t_min=norm_params['t_min'],
         t_max=norm_params['t_max'],
-        theta_min=norm_params['theta_min'],
-        theta_max=norm_params['theta_max'],
         device=device
     )
     
