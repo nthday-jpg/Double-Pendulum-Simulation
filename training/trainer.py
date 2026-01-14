@@ -265,7 +265,7 @@ class Trainer:
                     print(f"  → New best model saved (val_loss: {val_loss:.6f})")
             return False
         
-        if val_loss < self.best_val_loss:
+        if self.best_val_loss - val_loss > self.config.early_stopping_min_delta:
             self.best_val_loss = val_loss
             self.patience_counter = 0
             if self.accelerator.is_main_process and self.best_model_path and hasattr(self, 'run_dir') and self.run_dir:

@@ -149,7 +149,9 @@ def parse_args():
     # Early stopping
     parser.add_argument('--early_stopping_patience', type=int, default=None,
                         help='Early stopping patience (None = disabled)')
-    
+    parser.add_argument('--early_stopping_min_delta', type=float, default=1e-4,
+                        help='Minimum change to qualify as improvement for early stopping') 
+
     # Physical parameters
     parser.add_argument('--m1', type=float, default=1.0,
                         help='Mass of first pendulum')
@@ -238,7 +240,8 @@ def main():
         
         # Early stopping
         early_stopping_patience=args.early_stopping_patience,
-        
+        early_stopping_min_delta=args.early_stopping_min_delta,
+
         # Physical parameters
         m1=args.m1,
         m2=args.m2,

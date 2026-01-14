@@ -81,6 +81,7 @@ class Config:
     
     # early stopping
     early_stopping_patience: int | None = None  # None = disabled, or number of epochs
+    early_stopping_min_delta: float = 1e-4
     
     # Physical parameters (for double pendulum)
     m1: float = 1.0
