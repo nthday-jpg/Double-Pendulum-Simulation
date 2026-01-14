@@ -116,8 +116,6 @@ def parse_args():
                         help='L2 regularization weight')
     
     # Physics / PINN
-    parser.add_argument('--use_physics', action='store_true', default=True,
-                        help='Use physics-informed loss')
     parser.add_argument('--data_loss_ratio', type=float, default=0.1,
                         help='Fraction of total loss from data (rest is physics)')
     parser.add_argument('--residual_type', type=str, default='lagrangian',
@@ -210,7 +208,6 @@ def main():
         l2_lambda=args.l2_lambda,
         
         # Physics / PINN
-        use_physics=args.use_physics,
         data_loss_ratio=args.data_loss_ratio,
         residual_type=args.residual_type,
         
