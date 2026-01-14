@@ -245,7 +245,8 @@ class Trainer:
                     unwrapped_model = self.accelerator.unwrap_model(self.model)
                     save_checkpoint(unwrapped_model, self.optimizer, self.config, 
                                    self.run_dir, epoch + 1, is_best=True, best_val_loss=val_loss,
-                                   t_period =getattr(self.config, 't_period ', None))
+                                   save_frequency=self.config.checkpoint_interval,
+                                   t_period=self.config.t_period )
                     print(f"  → New best model saved (val_loss: {val_loss:.6f})")
             return False
         
@@ -256,7 +257,8 @@ class Trainer:
                 unwrapped_model = self.accelerator.unwrap_model(self.model)
                 save_checkpoint(unwrapped_model, self.optimizer, self.config, 
                                self.run_dir, epoch + 1, is_best=True, best_val_loss=val_loss,
-                               t_period =getattr(self.config, 't_period ', None))
+                               save_frequency=self.config.checkpoint_interval,
+                               t_period=self.config.t_period )
                 print(f"  → New best model saved (val_loss: {val_loss:.6f})")
         else:
             self.patience_counter += 1
