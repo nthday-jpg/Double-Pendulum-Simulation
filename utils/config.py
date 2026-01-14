@@ -18,7 +18,6 @@ class Config:
     val_split: float = 0.2
     test_split: float = 0.1
     normalize_time: bool = True
-    normalize_state: bool = True
 
     # model architecture
     model: str = "mlp"   # mlp | neural_ode | hnn | pinn
