@@ -19,7 +19,7 @@ from physics.equations import double_pendulum_derivatives, compute_energy
 
 def load_model(checkpoint_path, device='cpu'):
     """Load trained PINN model from checkpoint with normalization parameters."""
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     from utils.config import Config
     cfg = Config(**checkpoint['config'])
     model = PINN(cfg).to(device)

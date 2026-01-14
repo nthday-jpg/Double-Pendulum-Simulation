@@ -62,7 +62,7 @@ class Trainer:
         """Resume training from checkpoint."""
         if self.accelerator.is_main_process:
             print(f"📁 Resuming training from checkpoint: {checkpoint_path}")
-        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
         unwrapped_model = self.accelerator.unwrap_model(self.model)
         unwrapped_model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -387,7 +387,7 @@ class Trainer:
 
     def load_model(self, path):
         unwrapped_model = self.accelerator.unwrap_model(self.model)
-        unwrapped_model.load_state_dict(torch.load(path, map_location=self.device))
+        unwrapped_model.load_state_dict(torch.load(path, map_location=self.device, weights_only=False))
     
     def evaluate_test_set(self):
         """Evaluate the model on test set (temporal extrapolation)."""
@@ -406,7 +406,7 @@ class Trainer:
             if self.accelerator.is_main_process:
                 print(f"Loading best model from: {self.best_model_path}")
             
-            checkpoint = torch.load(self.best_model_path, map_location=self.device)
+            checkpoint = torch.load(self.best_model_path, map_location=self.device, weights_only=False)
             unwrapped_model = self.accelerator.unwrap_model(self.model)
             unwrapped_model.load_state_dict(checkpoint['model_state_dict'])
         elif self.accelerator.is_main_process:

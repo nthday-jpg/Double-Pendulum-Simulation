@@ -322,6 +322,6 @@ if __name__ == "__main__":
     # Test the derivation
     M, rest, symbols = derive_double_pendulum_dynamics()
     print("Mass Matrix M:")
-    sp.pprint(M)
+    print(M)
     print("\nRest Vector C:")
-    sp.pprint(rest)
+    print(rest)

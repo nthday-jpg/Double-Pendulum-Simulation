@@ -62,7 +62,7 @@ def save_checkpoint(model, optimizer, cfg, run_dir, epoch, is_best=False, best_v
 
 def load_checkpoint(checkpoint_path, model_class, device='cpu'):
     """Load model from checkpoint."""
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     
     # Reconstruct config
     cfg = Config(**checkpoint['config'])
