@@ -31,7 +31,8 @@ def compute_loss(model, batch, data_loss_ratio=1.0, t_period=None):
     }
 
     residual = physics_residual(q_pred, qdot_pred, qdd_pred, parameters, time_period=t_period)
-    physics_loss = torch.mean(residual**2)
+    # normalized by g to keep scale consistent
+    physics_loss = torch.mean((residual/parameters['g'])**2)
 
     # ---------- Data loss (data points only) ----------
     data_mask = (point_type == 0)
