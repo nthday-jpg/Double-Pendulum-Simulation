@@ -208,7 +208,7 @@ class Trainer:
                     unwrapped_model = self.model
                 if hasattr(self, 'run_dir') and self.run_dir:
                     save_checkpoint(unwrapped_model, self.optimizer, self.config, run_dir, epoch + 1,
-                                   t_max_dataset=getattr(self.config, 't_max_dataset', None))
+                                   t_period =getattr(self.config, 't_period ', None))
             raise  # Re-raise to see full traceback
         
         finally:
@@ -233,6 +233,7 @@ class Trainer:
         loss, loss_dict = compute_loss(
             self.model, (t, initial_state, state, point_type),
             data_loss_ratio=self.config.data_loss_ratio,
+            t_period =self.config.t_period
         )
         
         self.accelerator.backward(loss)
@@ -260,7 +261,7 @@ class Trainer:
                     unwrapped_model = self.accelerator.unwrap_model(self.model)
                     save_checkpoint(unwrapped_model, self.optimizer, self.config, 
                                    self.run_dir, epoch + 1, is_best=True, best_val_loss=val_loss,
-                                   t_max_dataset=getattr(self.config, 't_max_dataset', None))
+                                   t_period =getattr(self.config, 't_period ', None))
                     print(f"  → New best model saved (val_loss: {val_loss:.6f})")
             return False
         
@@ -271,7 +272,7 @@ class Trainer:
                 unwrapped_model = self.accelerator.unwrap_model(self.model)
                 save_checkpoint(unwrapped_model, self.optimizer, self.config, 
                                self.run_dir, epoch + 1, is_best=True, best_val_loss=val_loss,
-                               t_max_dataset=getattr(self.config, 't_max_dataset', None))
+                               t_period =getattr(self.config, 't_period ', None))
                 print(f"  → New best model saved (val_loss: {val_loss:.6f})")
         else:
             self.patience_counter += 1
@@ -301,6 +302,7 @@ class Trainer:
                     loss, loss_dict = compute_loss(
                         unwrapped_model, (t, initial_state, state, point_type),
                         data_loss_ratio=self.config.data_loss_ratio,
+                        t_period =self.config.t_period ,
                     )
             
             # Extract loss values and immediately free the computation graph

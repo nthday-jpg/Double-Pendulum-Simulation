@@ -50,11 +50,12 @@ def compute_derivatives(q, t):
             
     return qdot, qdd
 
-def physics_residual(q, qdot, qdd, parameters):
+def physics_residual(q, qdot, qdd, parameters, time_period=None):
     """
         Computes the physics residual for the double pendulum dynamics
         given q, qdot, qdd.
         parameters: dict with keys 'm1', 'm2', 'l1', 'l2', 'g'
+        time_period: float or None, if time normalization is used
     """
     # Convert parameters to tensors on same device as q
     device = q.device
@@ -70,10 +71,16 @@ def physics_residual(q, qdot, qdd, parameters):
     # Type assertion for Pylance
     assert M_fn is not None and C_fn is not None
 
+    if time_period is not None:
+        # Adjust for time normalization (t -> t / T)
+        # d/dt = (1/T) d/d(t/T)  =>  d^2/dt^2 = (1/T^2) d^2/d(t/T)^2
+        T = time_period
+        qdot = qdot / T
+        qdd = qdd / (T ** 2)
+
     M = M_fn(q[:, 0], q[:, 1], m1, m2, l1, l2)  # (N, 2, 2)
     C = C_fn(q[:, 0], q[:, 1], qdot[:, 0], qdot[:, 1], m1, m2, l1, l2, g)  # (N, 2)
 
-    # Use 
     rhs = torch.linalg.solve(M, C.unsqueeze(-1)).squeeze(-1)
     residual = qdd + rhs
         

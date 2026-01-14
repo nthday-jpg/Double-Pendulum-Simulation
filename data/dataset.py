@@ -110,8 +110,7 @@ class CollocationDataset(Dataset):
         state  : (2,) dummy zeros
         point_type : 1 (collocation point)
     """
-    def __init__(self, tmin, tmax, num_points, initial_states=None, 
-                 normalize_time=True, t_max_global=1.0):
+    def __init__(self, tmin, tmax, num_points, initial_states=None):
         """
         Args:
             tmin: Minimum time
@@ -119,11 +118,7 @@ class CollocationDataset(Dataset):
             num_points: Number of collocation points
             initial_states: List of initial states (4,) from all trajectories, or None for zeros
         """
-        self.t_raw = np.random.uniform(tmin, tmax, size=(num_points, 1))
-        if normalize_time:
-            self.t = self.t_raw / t_max_global
-        else:
-            self.t = self.t_raw
+        self.t = np.random.uniform(tmin, tmax, size=(num_points, 1))
         self.initial_states = initial_states if initial_states is not None else [np.zeros(4)]
         # Randomly assign an initial state to each collocation point
         self.assigned_initial_states = np.array([
@@ -202,21 +197,19 @@ def get_dataloader(data_dir, config,
     # Get all initial states for collocation (from all trajectories)
     initial_states_np = [traj['initial_state'] for traj in data_dataset.trajectories]
     
-    # Get actual time range from dataset
-    t_min_data = min(traj['t'].min() for traj in data_dataset.trajectories)
     t_max_data = data_dataset.t_max  # Already computed from all trajectories
     
     # Store actual dataset time range in config for checkpoint saving
-    config.t_max_dataset = t_max_data
+    if config.normalize_time:
+        config.t_period  = t_max_data
+    else:
+        config.t_period  = None
     
+    t_max_collo = 1.0 if config.normalize_time else t_max_data
     # Use actual data time range for collocation (not config defaults!)
     # This ensures collocation points cover the same domain as training data
-    t_max_for_norm = t_max_data if config.normalize_time else 1.0
-    collocation_dataset = CollocationDataset(t_min_data, t_max_data,  # Use actual data range
-                                            config.n_collocation, initial_states_np,
-                                            normalize_time=config.normalize_time,
-                                            t_max_global=t_max_for_norm)
-    
+    collocation_dataset = CollocationDataset(0.0, t_max_collo,  # Use actual data range
+                                            config.n_collocation, initial_states_np)    
     # Import seed_worker for DataLoader workers
     from utils.seed import seed_worker
     

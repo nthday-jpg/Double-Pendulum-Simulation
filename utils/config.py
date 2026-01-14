@@ -68,7 +68,7 @@ class Config:
     residual_type: str = "lagrangian"  # eom | hamiltonian | lagrangian
 
     # time domain
-    t_max_dataset: float | None = None  # Actual max time from dataset (set during data loading)
+    t_period : float | None = None  # Actual max time from dataset (set during data loading)
     collocation_sampling: str = "uniform"  # uniform | random | latin_hypercube
 
     # logging

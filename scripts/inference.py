@@ -27,10 +27,10 @@ def load_model(checkpoint_path, device='cpu'):
     model.eval()
     
     # Extract normalization parameters from checkpoint
-    # Use t_max_dataset (actual training data range) for proper normalization
+    # Use t_period  (actual training data range) for proper normalization
     normalization_params = {
         'normalize_time': cfg.normalize_time,
-        't_max': checkpoint.get('t_max_dataset', 1.0),  # Use actual dataset max time
+        't_max': checkpoint.get('t_period ', 1.0),  # Use actual dataset max time
     }
     
     return model, cfg, normalization_params
@@ -64,8 +64,8 @@ def simulate_with_pinn(model, initial_state, t_span, num_points,
     t = np.linspace(t_span[0], t_span[1], num_points)
     
     # Normalize time using TRAINING dataset range (same normalization as during training)
-    # Model was trained with t normalized by t_max_dataset, so we must use the same normalization
-    # Dataset normalizes as: t_normalized = t / t_max_dataset
+    # Model was trained with t normalized by t_period , so we must use the same normalization
+    # Dataset normalizes as: t_normalized = t / t_period 
     if normalize_time:
         t_norm = t / t_max  # Use same normalization as training dataset
         t_tensor = torch.tensor(t_norm, dtype=torch.float32).unsqueeze(1).to(device)

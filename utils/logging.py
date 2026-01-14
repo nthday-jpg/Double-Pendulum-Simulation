@@ -30,11 +30,11 @@ def init_run(cfg: Config):
     print(f"📊 Logging to: {run_dir}")
     return writer, csv_file, tb, run_dir
 
-def save_checkpoint(model, optimizer, cfg, run_dir, epoch, is_best=False, best_val_loss=None, save_frequency=100, t_max_dataset=None):
+def save_checkpoint(model, optimizer, cfg, run_dir, epoch, is_best=False, best_val_loss=None, save_frequency=100, t_period =None):
     """Save model checkpoint with config, training state, and dataset normalization parameters.
     
     Args:
-        t_max_dataset: Actual t_max from training dataset (for proper inference normalization)
+        t_period : Actual t_max from training dataset (for proper inference normalization)
     """
     checkpoint = {
         'epoch': epoch,
@@ -42,7 +42,7 @@ def save_checkpoint(model, optimizer, cfg, run_dir, epoch, is_best=False, best_v
         'optimizer_state_dict': optimizer.state_dict(),
         'config': vars(cfg),  # Config contains all settings including normalize_time, t_min, t_max, etc.
         'best_val_loss': best_val_loss if best_val_loss is not None else float('inf'),
-        't_max_dataset': t_max_dataset if t_max_dataset is not None else getattr(cfg, 't_max', 1.0),  # Actual dataset max time
+        't_period ': t_period  if t_period  is not None else getattr(cfg, 't_max', 1.0),  # Actual dataset max time
     }
     
     # Ensure checkpoints directory exists
