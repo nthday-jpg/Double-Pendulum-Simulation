@@ -4,7 +4,6 @@ import os
 import csv
 import matplotlib.pyplot as plt
 import pandas as pd
-import itertools
 from accelerate import Accelerator
 from models.pinn import PINN
 from training.losses import compute_loss
@@ -13,17 +12,16 @@ from utils.logging import init_run, save_checkpoint, load_checkpoint
 
 class Trainer:
     def __init__(self, model: PINN, config: Config,
-                 data_loader, collocation_loader, val_loader, test_loader,
+                 data_loader, val_loader, test_loader,
                  optimizer, scheduler=None):
         """
-        Trainer with separate dataloaders for data and collocation points.
-        Allows different batch sizes for each.
+        Trainer for PINN model using data_loss_ratio to balance physics and data losses.
         
         Usage:
-            config.batch_size = 32  # small for data
-            config.batch_size_collocation = 256  # large for collocation
-            data_loader, colloc_loader, val_loader, test_loader = get_dataloader(...)
-            trainer = Trainer(model, config, data_loader, colloc_loader, val_loader, test_loader, optimizer)
+            config.batch_size = 128
+            config.data_loss_ratio = 0.1  # 10% data, 90% physics
+            train_loader, val_loader, test_loader = get_dataloader(...)
+            trainer = Trainer(model, config, train_loader, val_loader, test_loader, optimizer)
         """
         self.accelerator = Accelerator(
             mixed_precision='fp16' if hasattr(config, 'mixed_precision') and config.mixed_precision else 'no',
@@ -37,8 +35,8 @@ class Trainer:
             print("⚠ torch.compile disabled: incompatible with PINN double backward")
         
         # Prepare model, optimizer, and dataloaders
-        self.model, self.optimizer, self.data_loader, self.collocation_loader, self.val_loader, self.test_loader = self.accelerator.prepare(
-            model, optimizer, data_loader, collocation_loader, val_loader, test_loader
+        self.model, self.optimizer, self.data_loader, self.val_loader, self.test_loader = self.accelerator.prepare(
+            model, optimizer, data_loader, val_loader, test_loader
         )
         
         self.scheduler = scheduler
@@ -91,7 +89,7 @@ class Trainer:
             print("="*60, flush=True)
             print(f"Starting training for {self.config.epochs} epochs...", flush=True)
             print(f"Device: {self.device}", flush=True)
-            print(f"Data batch: {self.config.batch_size}, Collocation batch: {self.config.batch_size_collocation or self.config.batch_size}", flush=True)
+            print(f"Batch size: {self.config.batch_size}, Data loss ratio: {self.config.data_loss_ratio:.2f}", flush=True)
             print("="*60, flush=True)
         
         try:
@@ -102,25 +100,11 @@ class Trainer:
                 total_data_loss = 0.0
                 total_samples = 0
                 
-                # Alternate between data and collocation batches
-                data_iter = iter(self.data_loader)
-                colloc_iter = itertools.cycle(self.collocation_loader)
-                
-                batch_count = 0
-                for data_batch in data_iter:
-                    batch_count += 1
-                    
+                # Process all data batches
+                for data_batch in self.data_loader:
                     total_train_loss, total_physics_loss, total_data_loss, total_samples = self._train_step(
                         data_batch, total_train_loss, total_physics_loss, total_data_loss, total_samples
                     )
-                    
-                    # Process collocation batches based on data_fraction
-                    n_colloc = max(1, int((1 - self.config.data_fraction) / self.config.data_fraction))
-                    for _ in range(n_colloc):
-                        colloc_batch = next(colloc_iter)
-                        total_train_loss, total_physics_loss, total_data_loss, total_samples = self._train_step(
-                            colloc_batch, total_train_loss, total_physics_loss, total_data_loss, total_samples
-                        )
                 
                 # Compute epoch averages
                 avg_train_loss = total_train_loss / total_samples

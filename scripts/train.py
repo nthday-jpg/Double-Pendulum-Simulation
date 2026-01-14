@@ -78,9 +78,7 @@ def parse_args():
     parser.add_argument('--lr', type=float, default=1e-3,
                         help='Learning rate')
     parser.add_argument('--batch_size', type=int, default=128,
-                        help='Batch size for data')
-    parser.add_argument('--batch_size_collocation', type=int, default=512,
-                        help='Batch size for collocation points')
+                        help='Batch size for training')
     parser.add_argument('--epochs', type=int, default=1000,
                         help='Number of training epochs')
     parser.add_argument('--optimizer', type=str, default='adam',
@@ -120,19 +118,11 @@ def parse_args():
     # Physics / PINN
     parser.add_argument('--use_physics', action='store_true', default=True,
                         help='Use physics-informed loss')
-    parser.add_argument('--n_collocation', type=int, default=5000,
-                        help='Number of collocation points')
-    parser.add_argument('--data_fraction', type=float, default=0.1,
-                        help='Fraction of data points vs collocation')
-    parser.add_argument('--data_loss_ratio', type=float, default=1.0,
-                        help='Weight for data loss')
+    parser.add_argument('--data_loss_ratio', type=float, default=0.1,
+                        help='Fraction of total loss from data (rest is physics)')
     parser.add_argument('--residual_type', type=str, default='lagrangian',
                         choices=['eom', 'lagrangian', 'hamiltonian'],
                         help='Type of physics residual')
-    
-    parser.add_argument('--collocation_sampling', type=str, default='uniform',
-                        choices=['uniform', 'random', 'latin_hypercube'],
-                        help='Collocation sampling strategy')
     
     # Logging
     parser.add_argument('--log_interval', type=int, default=1,
@@ -200,7 +190,6 @@ def main():
         # Training
         lr=args.lr,
         batch_size=args.batch_size,
-        batch_size_collocation=args.batch_size_collocation,
         epochs=args.epochs,
         optimizer=args.optimizer,
         weight_decay=args.weight_decay,
@@ -222,13 +211,8 @@ def main():
         
         # Physics / PINN
         use_physics=args.use_physics,
-        n_collocation=args.n_collocation,
-        data_fraction=args.data_fraction,
         data_loss_ratio=args.data_loss_ratio,
         residual_type=args.residual_type,
-        
-        # Time domain
-        collocation_sampling=args.collocation_sampling,
         
         # Logging
         log_interval=args.log_interval,
@@ -275,7 +259,7 @@ def main():
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=cfg.epochs // 3, gamma=0.1)
     
     # Get data loaders
-    data_loader, colloc_loader, val_loader, test_loader = get_dataloader(
+    train_loader, val_loader, test_loader = get_dataloader(
         data_dir=args.data_dir,
         config=cfg
     )
@@ -284,8 +268,7 @@ def main():
     trainer = Trainer(
         model=model,
         config=cfg,
-        data_loader=data_loader,
-        collocation_loader=colloc_loader,
+        data_loader=train_loader,
         val_loader=val_loader,
         test_loader=test_loader,
         optimizer=optimizer,

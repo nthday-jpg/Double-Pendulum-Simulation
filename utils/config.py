@@ -35,8 +35,7 @@ class Config:
 
     # training
     lr: float = 1e-3
-    batch_size: int = 128  # Batch size for data points
-    batch_size_collocation: int | None = None  # Batch size for collocation points (None = same as batch_size)
+    batch_size: int = 128
     epochs: int = 500
     optimizer: str = "adam"  # adam | adamw | sgd
     weight_decay: float = 0.0
@@ -61,15 +60,11 @@ class Config:
 
     # physics / PINN
     use_physics: bool = True
-    n_collocation: int = 5000
-    data_fraction: float = 0.1
-    #physics_weight: float = 1-data_loss_ratio
-    data_loss_ratio: float = 1.0
+    data_loss_ratio: float = 0.1  # Fraction of total loss from data (rest is physics)
     residual_type: str = "lagrangian"  # eom | hamiltonian | lagrangian
 
     # time domain
-    t_period : float | None = None  # Actual max time from dataset (set during data loading)
-    collocation_sampling: str = "uniform"  # uniform | random | latin_hypercube
+    t_period: float | None = None  # Actual max time from dataset (set during data loading)
 
     # logging
     log_interval: int = 10  # Log metrics to CSV/TensorBoard every N epochs (1 = every epoch)

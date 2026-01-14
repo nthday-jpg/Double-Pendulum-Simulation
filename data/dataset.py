@@ -99,47 +99,10 @@ class PendulumDataset(Dataset):
         return t, initial_state, state, 0  # point_type = 0 for data
 
 
-class CollocationDataset(Dataset):
-    """
-    Collocation points for physics loss.
-    Samples from all trajectories' initial states.
-    
-    Returns:
-        t      : (1,)
-        initial_state : (4,) sampled from available initial states
-        state  : (2,) dummy zeros
-        point_type : 1 (collocation point)
-    """
-    def __init__(self, tmin, tmax, num_points, initial_states=None):
-        """
-        Args:
-            tmin: Minimum time
-            tmax: Maximum time
-            num_points: Number of collocation points
-            initial_states: List of initial states (4,) from all trajectories, or None for zeros
-        """
-        self.t = np.random.uniform(tmin, tmax, size=(num_points, 1))
-        self.initial_states = initial_states if initial_states is not None else [np.zeros(4)]
-        # Randomly assign an initial state to each collocation point
-        self.assigned_initial_states = np.array([
-            self.initial_states[np.random.randint(len(self.initial_states))]
-            for _ in range(num_points)
-        ])
-
-    def __len__(self):
-        return len(self.t)
-
-    def __getitem__(self, idx):
-        t = torch.tensor(self.t[idx], dtype=torch.float32)
-        initial_state = torch.tensor(self.assigned_initial_states[idx], dtype=torch.float32)
-        dummy_state = torch.zeros(2)
-        return t, initial_state, dummy_state, 1  # point_type = 1 for collocation
-
-
 def get_dataloader(data_dir, config,
                    num_workers=None, shuffle=True):
     """
-    Create separate dataloaders for data, collocation, validation, and test sets.
+    Create dataloaders for training, validation, and test sets.
     Test set contains the LAST time points from each trajectory for temporal extrapolation testing.
     
     Args:
@@ -152,7 +115,6 @@ def get_dataloader(data_dir, config,
     
     Returns:
         train_loader: DataLoader for training data points (early time)
-        collocation_loader: DataLoader for collocation points
         val_loader: DataLoader for validation (early time)
         test_loader: DataLoader for test (late time - extrapolation)
     """
@@ -162,7 +124,6 @@ def get_dataloader(data_dir, config,
             num_workers = 0
     
     batch_size = config.batch_size
-    batch_size_collocation = config.batch_size_collocation or batch_size
 
     data_dataset = PendulumDataset(data_dir, normalize_time=config.normalize_time)
 
@@ -194,22 +155,14 @@ def get_dataloader(data_dir, config,
         train_val_dataset, [train_size, val_size], generator=generator
     )
     
-    # Get all initial states for collocation (from all trajectories)
-    initial_states_np = [traj['initial_state'] for traj in data_dataset.trajectories]
-    
     t_max_data = data_dataset.t_max  # Already computed from all trajectories
     
     # Store actual dataset time range in config for checkpoint saving
     if config.normalize_time:
-        config.t_period  = t_max_data
+        config.t_period = t_max_data
     else:
-        config.t_period  = None
+        config.t_period = None
     
-    t_max_collo = 1.0 if config.normalize_time else t_max_data
-    # Use actual data time range for collocation (not config defaults!)
-    # This ensures collocation points cover the same domain as training data
-    collocation_dataset = CollocationDataset(0.0, t_max_collo,  # Use actual data range
-                                            config.n_collocation, initial_states_np)    
     # Import seed_worker for DataLoader workers
     from utils.seed import seed_worker
     
@@ -244,18 +197,8 @@ def get_dataloader(data_dir, config,
         generator=torch.Generator().manual_seed(config.seed)
     )
     
-    collocation_loader = DataLoader(
-        collocation_dataset,
-        batch_size=batch_size_collocation,
-        shuffle=shuffle, 
-        num_workers=num_workers,
-        pin_memory=torch.cuda.is_available(),
-        worker_init_fn=seed_worker,
-        generator=torch.Generator().manual_seed(config.seed)
-    )
-    
-    print(f"DataLoaders: data_bs={batch_size}, colloc_bs={batch_size_collocation}, workers={num_workers}")
+    print(f"DataLoaders: batch_size={batch_size}, workers={num_workers}")
     print(f"Dataset splits: train={train_size}, val={val_size}, test={len(test_indices)} (late time)")
     print(f"Temporal split: train/val use first {int((1-config.test_split)*100)}% of time, test uses last {int(config.test_split*100)}%")
     
-    return train_loader, collocation_loader, val_loader, test_loader
+    return train_loader, val_loader, test_loader
