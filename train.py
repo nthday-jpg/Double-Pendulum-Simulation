@@ -136,12 +136,6 @@ def parse_args():
                         choices=['uniform', 'random', 'latin_hypercube'],
                         help='Collocation sampling strategy')
     
-    # Rollout evaluation
-    parser.add_argument('--rollout_T', type=float, default=5.0,
-                        help='Rollout time horizon')
-    parser.add_argument('--rollout_dt', type=float, default=0.01,
-                        help='Rollout time step')
-    
     # Logging
     parser.add_argument('--log_interval', type=int, default=1,
                         help='Log to CSV/TensorBoard every N epochs')
@@ -236,10 +230,6 @@ def main():
         
         # Time domain
         collocation_sampling=args.collocation_sampling,
-        
-        # Rollout evaluation
-        rollout_T=args.rollout_T,
-        rollout_dt=args.rollout_dt,
         
         # Logging
         log_interval=args.log_interval,

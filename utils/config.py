@@ -72,10 +72,6 @@ class Config:
     t_max_dataset: float | None = None  # Actual max time from dataset (set during data loading)
     collocation_sampling: str = "uniform"  # uniform | random | latin_hypercube
 
-    # rollout evaluation
-    rollout_T: float = 5.0
-    rollout_dt: float = 0.01
-
     # logging
     log_interval: int = 10  # Log metrics to CSV/TensorBoard every N epochs (1 = every epoch)
     print_interval: int = 10  # Print progress to console every N epochs
