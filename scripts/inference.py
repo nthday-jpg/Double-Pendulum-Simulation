@@ -27,10 +27,9 @@ def load_model(checkpoint_path, device='cpu'):
     model.eval()
     
     # Extract normalization parameters from checkpoint
-    # Use t_period  (actual training data range) for proper normalization
     normalization_params = {
         'normalize_time': cfg.normalize_time,
-        't_max': checkpoint.get('t_period ', 1.0),  # Use actual dataset max time
+        'time_scale': checkpoint.get('time_scale', 1.0),  
     }
     
     return model, cfg, normalization_params
@@ -38,7 +37,7 @@ def load_model(checkpoint_path, device='cpu'):
 
 def simulate_with_pinn(model, initial_state, t_span, num_points, 
                        normalize_time=True,
-                       t_max=1.0, 
+                       time_scale=1.0, 
                        device='cpu'):
     """
     Simulate double pendulum trajectory using trained PINN model.
@@ -50,7 +49,7 @@ def simulate_with_pinn(model, initial_state, t_span, num_points,
         t_span: (t_start, t_end) in PHYSICAL units
         num_points: Number of time points
         normalize_time: Whether time was normalized during training
-        t_max: Max time from training dataset (for normalization)
+        time_scale: Max time from training dataset (for normalization)
         device: Device to run on
         
     Returns:
@@ -64,10 +63,10 @@ def simulate_with_pinn(model, initial_state, t_span, num_points,
     t = np.linspace(t_span[0], t_span[1], num_points)
     
     # Normalize time using TRAINING dataset range (same normalization as during training)
-    # Model was trained with t normalized by t_period , so we must use the same normalization
-    # Dataset normalizes as: t_normalized = t / t_period 
+    # Model was trained with t normalized by time_scale , so we must use the same normalization
+    # Dataset normalizes as: t_normalized = t / time_scale 
     if normalize_time:
-        t_norm = t / t_max  # Use same normalization as training dataset
+        t_norm = t / time_scale  # Use same normalization as training dataset
         t_tensor = torch.tensor(t_norm, dtype=torch.float32).unsqueeze(1).to(device)
     else:
         t_tensor = torch.tensor(t, dtype=torch.float32).unsqueeze(1).to(device)
@@ -295,7 +294,7 @@ def run_inference(checkpoint_path, initial_state=None, t_span=(0, 10), num_point
     model, cfg, norm_params = load_model(checkpoint_path, device)
     
     print(f"Normalization settings:")
-    print(f"  Time: {norm_params['normalize_time']} | t_max (from training data): {norm_params['t_max']:.3f}")
+    print(f"  Time: {norm_params['normalize_time']} | time_scale (from training data): {norm_params['time_scale']:.3f}")
     
     print(f"\nInitial state: theta1={initial_state[0]:.3f}, theta2={initial_state[1]:.3f}, "
           f"omega1={initial_state[2]:.3f}, omega2={initial_state[3]:.3f}")
@@ -306,7 +305,7 @@ def run_inference(checkpoint_path, initial_state=None, t_span=(0, 10), num_point
     t_pred, q_pred, qdot_pred = simulate_with_pinn(
         model, initial_state, t_span, num_points,
         normalize_time=norm_params['normalize_time'],
-        t_max=norm_params['t_max'],
+        time_scale=norm_params['time_scale'],
         device=device
     )
     

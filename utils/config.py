@@ -18,6 +18,7 @@ class Config:
     val_split: float = 0.2
     test_split: float = 0.1
     normalize_time: bool = True
+    time_scale: float = 1.0  # Scale factor for time normalization
 
     # model architecture
     model: str = "mlp"   # mlp | neural_ode | hnn | pinn
@@ -61,9 +62,6 @@ class Config:
     # physics / PINN
     data_loss_ratio: float = 0.1  # Fraction of total loss from data (rest is physics)
     residual_type: str = "lagrangian"  # eom | hamiltonian | lagrangian
-
-    # time domain
-    t_period: float | None = None  # Actual max time from dataset (set during data loading)
 
     # logging
     log_interval: int = 10  # Log metrics to CSV/TensorBoard every N epochs (1 = every epoch)

@@ -62,10 +62,10 @@ class PendulumDataset(Dataset):
         self.total_length = self.cumulative_lengths[-1]
 
         if self.normalize_time:
-            all_t = np.concatenate([traj['t'] for traj in self.trajectories])
-            self.t_max = all_t.max()
-        else:
-            self.t_max = 1.0
+            # Assume all trajectories share the same time scale for normalization
+            # Nondimensionalize time using characteristic time scale T = sqrt((l1 + l2) / (2g))
+            char_parameter = self.parameters_list[0]
+            self.time_scale = np.sqrt((char_parameter['l1'] + char_parameter['l2']) / (2*char_parameter['g']))
         
         # Check if all parameters are the same
         all_same = all(p == self.parameters_list[0] for p in self.parameters_list)
@@ -90,8 +90,7 @@ class PendulumDataset(Dataset):
         traj = self.trajectories[traj_idx]
         t_raw = torch.tensor([traj['t'][local_idx]], dtype=torch.float32)
         if self.normalize_time:
-            # 
-            t = t_raw / self.t_max
+            t = t_raw / self.time_scale
         else:
             t = t_raw
         initial_state = torch.tensor(traj['initial_state'], dtype=torch.float32)
@@ -154,14 +153,10 @@ def get_dataloader(data_dir, config,
     train_dataset, val_dataset = torch.utils.data.random_split(
         train_val_dataset, [train_size, val_size], generator=generator
     )
-    
-    t_max_data = data_dataset.t_max  # Already computed from all trajectories
-    
+        
     # Store actual dataset time range in config for checkpoint saving
     if config.normalize_time:
-        config.t_period = t_max_data
-    else:
-        config.t_period = None
+        config.time_scale = data_dataset.time_scale
     
     # Import seed_worker for DataLoader workers
     from utils.seed import seed_worker
