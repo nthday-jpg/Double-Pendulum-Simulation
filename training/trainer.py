@@ -2,13 +2,11 @@ import torch.nn as nn
 import torch
 import os
 import csv
-import matplotlib.pyplot as plt
-import pandas as pd
 from accelerate import Accelerator
 from models.pinn import PINN
 from training.losses import compute_loss
 from utils.config import Config
-from utils.logging import init_run, save_checkpoint
+from utils.logging import *
 
 class Trainer:
     def __init__(self, model: PINN, config: Config,
@@ -157,7 +155,7 @@ class Trainer:
                     
                     print_interval = getattr(self.config, 'print_interval', 10)
                     if (epoch + 1) % print_interval == 0 or epoch == 0:
-                        self._print_beautiful_log(epoch + 1, avg_train_loss, avg_physics_loss, avg_trajectory_loss, avg_kinetic_loss,
+                        print_beautiful_log(self.config, epoch + 1, avg_train_loss, avg_physics_loss, avg_trajectory_loss, avg_kinetic_loss,
                                                  val_metrics)
                     
                 if (epoch + 1) % getattr(self.config, 'test_interval', 50) == 0:
@@ -215,9 +213,8 @@ class Trainer:
                     print(f"Best model saved at: {self.best_model_path}")
                 
                 if hasattr(self, 'run_dir') and self.run_dir:
-                    self.plot_losses(self.run_dir)
+                    plot_losses(self.run_dir)
                 
-    
     def _train_step(self, batch, total_train_loss, total_physics_loss, total_trajectory_loss, total_kinetic_loss, total_samples):
         """Single training step - shared between mixed and separate modes."""
         t, initial_state, state, qdot = batch
@@ -339,50 +336,6 @@ class Trainer:
             "kinetic_loss": avg_kinetic
         }
 
-    def _print_beautiful_log(self, epoch, train_loss, train_physics, train_trajectory, train_kinetic, val_metrics):
-        """Print beautifully formatted training logs."""
-        print("\n" + "="*80)
-        print(f"{'Epoch':<15} {epoch}/{self.config.epochs}")
-        print("="*80)
-        
-        # Header
-        print(f"{'Dataset':<15} {'Total Loss':<15} {'Physics Loss':<15} {'Data Loss':<15} {'Kinetic Loss':<15}")
-        print("-"*80)
-        
-        # Training
-        print(f"{'Train':<15} {train_loss:<15.6f} {train_physics:<15.6f} {train_trajectory:<15.6f} {train_kinetic:<15.6f}")
-        
-        # Validation
-        print(f"{'Validation':<15} {val_metrics['total_loss']:<15.6f} {val_metrics['physics_loss']:<15.6f} {val_metrics['trajectory_loss']:<15.6f} {val_metrics['kinetic_loss']:<15.6f}")
-        
-        print("="*80 + "\n")
-    
-    def plot_losses(self, run_dir):
-        """Plot training and validation losses."""
-        metrics_file = os.path.join(run_dir, "metrics.csv")
-        
-        if not os.path.exists(metrics_file):
-            print(f"Metrics file not found: {metrics_file}")
-            return
-        
-        df = pd.read_csv(metrics_file)
-        fig, ax = plt.subplots(figsize=(10, 6))
-        
-        ax.plot(df['epoch'], df['train_loss'], label='Training Loss', linewidth=2)
-        ax.plot(df['epoch'], df['val_loss'], label='Validation Loss', linewidth=2)
-        
-        ax.set_xlabel('Epoch', fontsize=12)
-        ax.set_ylabel('Loss', fontsize=12)
-        ax.set_title('Training and Validation Loss', fontsize=14)
-        ax.legend(fontsize=11)
-        ax.grid(True, alpha=0.3)
-        
-        plot_path = os.path.join(run_dir, "loss_plot.png")
-        plt.tight_layout()
-        plt.savefig(plot_path, dpi=150, bbox_inches='tight')
-        print(f"Loss plot saved to: {plot_path}")
-        plt.close()
-    
     def evaluate_test_set(self):
         """Evaluate the model on test set (temporal extrapolation)."""
         

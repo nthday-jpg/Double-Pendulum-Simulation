@@ -1,7 +1,8 @@
 # logging.py
 import os
 import csv
-import yaml
+import pandas as pd
+import matplotlib.pyplot as plt
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 import torch
@@ -64,3 +65,48 @@ def save_checkpoint(model, optimizer, scheduler, cfg, run_dir, epoch, is_best=Fa
         print(f"Saved best model checkpoint: {best_filepath}")
         
 # Load checkpoint is implemented in trainer.py to access Trainer attributes
+
+def plot_losses(run_dir):
+    """Plot training and validation losses."""
+    metrics_file = os.path.join(run_dir, "metrics.csv")
+    
+    if not os.path.exists(metrics_file):
+        print(f"Metrics file not found: {metrics_file}")
+        return
+    
+    df = pd.read_csv(metrics_file)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    ax.plot(df['epoch'], df['train_loss'], label='Training Loss', linewidth=2)
+    ax.plot(df['epoch'], df['val_loss'], label='Validation Loss', linewidth=2)
+    
+    ax.set_xlabel('Epoch', fontsize=12)
+    ax.set_ylabel('Loss', fontsize=12)
+    ax.set_title('Training and Validation Loss', fontsize=14)
+    ax.legend(fontsize=11)
+    ax.grid(True, alpha=0.3)
+    
+    plot_path = os.path.join(run_dir, "loss_plot.png")
+    plt.tight_layout()
+    plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+    print(f"Loss plot saved to: {plot_path}")
+    plt.close()
+
+def print_beautiful_log(config, epoch, train_loss, train_physics, train_trajectory, train_kinetic, val_metrics):
+        """Print beautifully formatted training logs."""
+        print("\n" + "="*80)
+        print(f"{'Epoch':<15} {epoch}/{config.epochs}")
+        print("="*80)
+        
+        # Header
+        print(f"{'Dataset':<15} {'Total Loss':<15} {'Physics Loss':<15} {'Data Loss':<15} {'Kinetic Loss':<15}")
+        print("-"*80)
+        
+        # Training
+        print(f"{'Train':<15} {train_loss:<15.6f} {train_physics:<15.6f} {train_trajectory:<15.6f} {train_kinetic:<15.6f}")
+        
+        # Validation
+        print(f"{'Validation':<15} {val_metrics['total_loss']:<15.6f} {val_metrics['physics_loss']:<15.6f} {val_metrics['trajectory_loss']:<15.6f} {val_metrics['kinetic_loss']:<15.6f}")
+        
+        print("="*80 + "\n")
+    
