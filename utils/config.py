@@ -41,7 +41,8 @@ class Config:
     optimizer: str = "adam"  # adam | adamw | sgd
     weight_decay: float = 0.0
     grad_clip: float | None = None
-    scheduler: str | None = None  # None | cosine | step
+    scheduler = True
+    scheduler_patience: int = 10  # for plateau scheduler
     
     # torch compile (PyTorch 2.0+)
     # Note: Disabled for PINNs due to double backward incompatibility

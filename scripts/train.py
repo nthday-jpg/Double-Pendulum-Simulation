@@ -250,10 +250,13 @@ def main():
     
     # Initialize scheduler if specified
     scheduler = None
-    if cfg.scheduler == 'cosine':
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.epochs)
-    elif cfg.scheduler == 'step':
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=cfg.epochs // 3, gamma=0.1)
+    if cfg.scheduler:
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode='min',
+            factor=0.5,
+            patience=cfg.scheduler_patience
+        )
     
     # Get data loaders
     train_loader, val_loader, test_loader = get_dataloader(
