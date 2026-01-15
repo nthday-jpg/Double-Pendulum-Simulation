@@ -88,9 +88,10 @@ def parse_args():
                         help='Weight decay (L2 regularization)')
     parser.add_argument('--grad_clip', type=float, default=None,
                         help='Gradient clipping value')
-    parser.add_argument('--scheduler', type=str, default=None,
-                        choices=['cosine', 'step'],
-                        help='Learning rate scheduler')
+    parser.add_argument('--scheduler', type=bool, default=False,
+                        help='Use learning rate scheduler')
+    parser.add_argument('--scheduler_patience', type=int, default=10,
+                        help='Patience for learning rate scheduler')
     
     # PyTorch optimizations
     parser.add_argument('--use_compile', action='store_true',

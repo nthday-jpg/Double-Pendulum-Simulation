@@ -137,6 +137,7 @@ def double_pendulum_derivatives(t, y, params):
     # Ensure rest is a 1D array
     rest = np.array(rest).flatten()
     
+    
     gamma = np.linalg.solve(M, rest)
 
     return np.array([omega1, omega2, gamma[0], gamma[1]])
