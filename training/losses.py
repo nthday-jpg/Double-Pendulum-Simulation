@@ -31,7 +31,7 @@ def compute_loss(model, batch, parameters_tensor, trajectory_loss_ratio=1.0, tim
     trajectory_loss = torch.mean(trajectory_res**2)
 
     # ---------- Total ----------
-    total_loss = (1 - trajectory_loss_ratio) * physics_loss + trajectory_loss_ratio * trajectory_loss
+    total_loss = (1 - trajectory_loss_ratio) * kenetic_loss + trajectory_loss_ratio * trajectory_loss
 
     loss_dict = {
         "physics_loss": physics_loss.item(),
