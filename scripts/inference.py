@@ -338,6 +338,7 @@ def run_inference(checkpoint_path, initial_state=None, t_span=(0, 10), num_point
         
         metrics['energy_drift_true'] = float(np.abs(E_true - E_true[0]).max() / np.abs(E_true[0]))
         metrics['energy_drift_pred'] = float(np.abs(E_pred - E_pred[0]).max() / np.abs(E_pred[0]))
+        metrics['energy_diff_max'] = float(np.abs(E_true - E_pred).max())
         
         # Save metrics
         metrics_filename = os.path.join(output_dir, "metrics.json")
@@ -355,6 +356,7 @@ def run_inference(checkpoint_path, initial_state=None, t_span=(0, 10), num_point
             print(f"Velocity MSE:   {metrics['mse_velocity']:.6f}")
         print(f"\nEnergy drift (true): {metrics['energy_drift_true']*100:.3f}%")
         print(f"Energy drift (pred): {metrics['energy_drift_pred']*100:.3f}%")
+        print(f"Max energy difference: {metrics['energy_diff_max']:.6f}")
         print("="*60)
     
     print(f"\nAll results saved to: {output_dir}")
