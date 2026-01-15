@@ -30,7 +30,7 @@ def init_run(cfg: Config):
     print(f"📊 Logging to: {run_dir}")
     return writer, csv_file, tb, run_dir
 
-def save_checkpoint(model, optimizer, cfg, run_dir, epoch, is_best=False, best_val_loss=None, save_frequency=100, time_scale=None):
+def save_checkpoint(model, optimizer, scheduler, cfg, run_dir, epoch, is_best=False, best_val_loss=None, save_frequency=100, time_scale=None):
     """Save model checkpoint with config, training state, and dataset normalization parameters.
     
     Args:
@@ -40,6 +40,7 @@ def save_checkpoint(model, optimizer, cfg, run_dir, epoch, is_best=False, best_v
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
+        'scheduler_state_dict': scheduler.state_dict() if scheduler else None,
         'config': vars(cfg),  # Config contains all settings including normalize_time, t_min, t_max, etc.
         'best_val_loss': best_val_loss if best_val_loss is not None else float('inf'),
         'time_scale': time_scale  if time_scale is not None else getattr(cfg, 'time_scale', 1.0),  # Actual dataset max time
@@ -62,15 +63,4 @@ def save_checkpoint(model, optimizer, cfg, run_dir, epoch, is_best=False, best_v
         torch.save(checkpoint, best_filepath)
         print(f"Saved best model checkpoint: {best_filepath}")
         
-def load_checkpoint(checkpoint_path, model_class, device='cpu'):
-    """Load model from checkpoint."""
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    
-    # Reconstruct config
-    cfg = Config(**checkpoint['config'])
-    
-    # Reconstruct model using config
-    model = model_class(cfg).to(device)
-    model.load_state_dict(checkpoint['model_state_dict'])
-    
-    return model, cfg, checkpoint['epoch']
+# Load checkpoint is implemented in trainer.py to access Trainer attributes

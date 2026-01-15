@@ -8,7 +8,7 @@ from accelerate import Accelerator
 from models.pinn import PINN
 from training.losses import compute_loss
 from utils.config import Config
-from utils.logging import init_run, save_checkpoint, load_checkpoint
+from utils.logging import init_run, save_checkpoint
 
 class Trainer:
     def __init__(self, model: PINN, config: Config,
@@ -64,6 +64,8 @@ class Trainer:
         unwrapped_model = self.accelerator.unwrap_model(self.model)
         unwrapped_model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        if self.scheduler and checkpoint['scheduler_state_dict'] is not None:
+            self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         if 'best_val_loss' in checkpoint:
             self.best_val_loss = checkpoint['best_val_loss']
         if self.accelerator.is_main_process:
@@ -191,7 +193,7 @@ class Trainer:
                 except (KeyError, AttributeError):
                     unwrapped_model = self.model
                 if hasattr(self, 'run_dir') and self.run_dir:
-                    save_checkpoint(unwrapped_model, self.optimizer, self.config, run_dir, epoch + 1,
+                    save_checkpoint(unwrapped_model, self.optimizer, self.scheduler,self.config, run_dir, epoch + 1,
                                    time_scale=getattr(self.config, 'time_scale', None))
             raise  # Re-raise to see full traceback
         
@@ -243,7 +245,7 @@ class Trainer:
                 self.best_val_loss = val_loss
                 if self.accelerator.is_main_process and self.best_model_path and hasattr(self, 'run_dir') and self.run_dir:
                     unwrapped_model = self.accelerator.unwrap_model(self.model)
-                    save_checkpoint(unwrapped_model, self.optimizer, self.config, 
+                    save_checkpoint(unwrapped_model, self.optimizer, self.scheduler, self.config, 
                                    self.run_dir, epoch + 1, is_best=True, best_val_loss=val_loss,
                                    save_frequency=self.config.checkpoint_interval,
                                    time_scale=self.config.time_scale )
@@ -255,7 +257,7 @@ class Trainer:
             self.patience_counter = 0
             if self.accelerator.is_main_process and self.best_model_path and hasattr(self, 'run_dir') and self.run_dir:
                 unwrapped_model = self.accelerator.unwrap_model(self.model)
-                save_checkpoint(unwrapped_model, self.optimizer, self.config, 
+                save_checkpoint(unwrapped_model, self.optimizer, self.scheduler, self.config, 
                                self.run_dir, epoch + 1, is_best=True, best_val_loss=val_loss,
                                save_frequency=self.config.checkpoint_interval,
                                time_scale=self.config.time_scale )
@@ -368,14 +370,6 @@ class Trainer:
         plt.savefig(plot_path, dpi=150, bbox_inches='tight')
         print(f"Loss plot saved to: {plot_path}")
         plt.close()
-
-    def save_model(self, path):
-        unwrapped_model = self.accelerator.unwrap_model(self.model)
-        torch.save(unwrapped_model.state_dict(), path)
-
-    def load_model(self, path):
-        unwrapped_model = self.accelerator.unwrap_model(self.model)
-        unwrapped_model.load_state_dict(torch.load(path, map_location=self.device, weights_only=False))
     
     def evaluate_test_set(self):
         """Evaluate the model on test set (temporal extrapolation)."""

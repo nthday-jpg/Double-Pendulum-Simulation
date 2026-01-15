@@ -259,7 +259,7 @@ def main():
             factor=0.5,
             patience=cfg.scheduler_patience
         )
-    
+
     # Get data loaders
     train_loader, val_loader, test_loader = get_dataloader(
         data_dir=args.data_dir,
