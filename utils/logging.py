@@ -54,12 +54,14 @@ def save_checkpoint(model, optimizer, cfg, run_dir, epoch, is_best=False, best_v
         filename = f"checkpoint_epoch_{epoch}.pth"
         filepath = os.path.join(checkpoints_dir, filename)
         torch.save(checkpoint, filepath)
+        print(f"Saved checkpoint: {filepath}")
     
     # Always save best
     if is_best:
         best_filepath = os.path.join(checkpoints_dir, "best_model.pth")
         torch.save(checkpoint, best_filepath)
-
+        print(f"Saved best model checkpoint: {best_filepath}")
+        
 def load_checkpoint(checkpoint_path, model_class, device='cpu'):
     """Load model from checkpoint."""
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
