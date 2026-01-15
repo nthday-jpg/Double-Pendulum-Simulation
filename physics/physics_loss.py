@@ -57,10 +57,12 @@ def trajectory_residual(q_pred, q_true):
     residual = q_pred - q_true
     return residual
 
-def kinetic_residual(qdot_pred, qdot_true):
+def kinetic_residual(qdot_pred, qdot_true, time_scale=None):
     """
         Enforces the kinematic relationship: qdot = dq/dt
     """
+    if time_scale is not None:
+        qdot_true = qdot_true * time_scale  # Adjust for time normalization
     residual = qdot_pred - qdot_true
     return residual
 

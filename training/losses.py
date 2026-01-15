@@ -2,7 +2,7 @@ import torch
 from physics.physics_loss import physics_residual, compute_derivatives, trajectory_residual, kinetic_residual
 
 def compute_loss(model, batch, parameters_tensor, trajectory_loss_ratio=1.0, time_scale=None, ):
-    t, initial_state, state, qdot, point_type = batch
+    t, initial_state, state, qdot = batch
     
     # Ensure t is a leaf tensor with proper shape and requires grad
     t = t.detach().view(-1, 1).requires_grad_(True)

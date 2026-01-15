@@ -99,7 +99,7 @@ class Trainer:
             print("="*60, flush=True)
             print(f"Starting training for {self.config.epochs} epochs...", flush=True)
             print(f"Device: {self.device}", flush=True)
-            print(f"Batch size: {self.config.batch_size}, Data loss ratio: {self.config.trajectory_loss_ratio:.2f}", flush=True)
+            print(f"Batch size: {self.config.batch_size}, Trajectory loss ratio: {self.config.trajectory_loss_ratio:.2f}", flush=True)
             print("="*60, flush=True)
         
         try:
@@ -108,18 +108,20 @@ class Trainer:
                 total_train_loss = 0.0
                 total_physics_loss = 0.0
                 total_trajectory_loss = 0.0
+                total_kinetic_loss = 0.0
                 total_samples = 0
                 
                 # Process all data batches
                 for data_batch in self.data_loader:
-                    total_train_loss, total_physics_loss, total_trajectory_loss, total_samples = self._train_step(
-                        data_batch, total_train_loss, total_physics_loss, total_trajectory_loss, total_samples
+                    total_train_loss, total_physics_loss, total_trajectory_loss, total_kinetic_loss, total_samples = self._train_step(
+                        data_batch, total_train_loss, total_physics_loss, total_trajectory_loss, total_kinetic_loss, total_samples
                     )
                 
                 # Compute epoch averages
                 avg_train_loss = total_train_loss / total_samples
                 avg_physics_loss = total_physics_loss / total_samples
                 avg_trajectory_loss = total_trajectory_loss / total_samples
+                avg_kinetic_loss = total_kinetic_loss / total_samples
 
                 # Validation
                 val_metrics = self.evaluate(self.val_loader, prefix="val")
@@ -133,10 +135,12 @@ class Trainer:
                             "epoch": epoch + 1,
                             "train_loss": avg_train_loss,
                             "train_physics": avg_physics_loss,
-                            "train_data": avg_trajectory_loss,
+                            "train_trajectory": avg_trajectory_loss,
                             "val_loss": avg_val_loss,
                             "val_physics": val_metrics["physics_loss"],
-                            "val_data": val_metrics["trajectory_loss"]
+                            "val_trajectory": val_metrics["trajectory_loss"],
+                            "train_kinetic": avg_kinetic_loss,
+                            "val_kinetic": val_metrics["kinetic_loss"]
                         }
                         
                         writer.writerow(log_dict) # type: ignore
@@ -144,14 +148,16 @@ class Trainer:
                         
                         tb.add_scalar("Loss/Train", avg_train_loss, epoch + 1) # type: ignore
                         tb.add_scalar("Loss/Train_Physics", avg_physics_loss, epoch + 1) # type: ignore
-                        tb.add_scalar("Loss/Train_Data", avg_trajectory_loss, epoch + 1) # type: ignore
+                        tb.add_scalar("Loss/Train_Trajectory", avg_trajectory_loss, epoch + 1) # type: ignore
+                        tb.add_scalar("Loss/Train_Kinetic", avg_kinetic_loss, epoch + 1) # type: ignore
                         tb.add_scalar("Loss/Val", avg_val_loss, epoch + 1)  # type: ignore
                         tb.add_scalar("Loss/Val_Physics", val_metrics["physics_loss"], epoch + 1) # type: ignore
-                        tb.add_scalar("Loss/Val_Data", val_metrics["trajectory_loss"], epoch + 1) # type: ignore
+                        tb.add_scalar("Loss/Val_Trajectory", val_metrics["trajectory_loss"], epoch + 1) # type: ignore
+                        tb.add_scalar("Loss/Val_Kinetic", val_metrics["kinetic_loss"], epoch + 1) # type: ignore
                     
                     print_interval = getattr(self.config, 'print_interval', 10)
                     if (epoch + 1) % print_interval == 0 or epoch == 0:
-                        self._print_beautiful_log(epoch + 1, avg_train_loss, avg_physics_loss, avg_trajectory_loss,
+                        self._print_beautiful_log(epoch + 1, avg_train_loss, avg_physics_loss, avg_trajectory_loss, avg_kinetic_loss,
                                                  val_metrics)
                     
                 if (epoch + 1) % getattr(self.config, 'test_interval', 50) == 0:
@@ -212,13 +218,13 @@ class Trainer:
                     self.plot_losses(self.run_dir)
                 
     
-    def _train_step(self, batch, total_train_loss, total_physics_loss, total_trajectory_loss, total_samples):
+    def _train_step(self, batch, total_train_loss, total_physics_loss, total_trajectory_loss, total_kinetic_loss, total_samples):
         """Single training step - shared between mixed and separate modes."""
-        t, initial_state, state, point_type = batch
+        t, initial_state, state = batch
         
         self.optimizer.zero_grad()
         loss, loss_dict = compute_loss(
-            self.model, (t, initial_state, state, point_type),
+            self.model, (t, initial_state, state),
             trajectory_loss_ratio=self.config.trajectory_loss_ratio,
             time_scale =self.config.time_scale, parameters_tensor=self.parameter_tensors
         )
@@ -235,9 +241,10 @@ class Trainer:
         total_train_loss += loss.item() * batch_size
         total_physics_loss += loss_dict["physics_loss"] * batch_size
         total_trajectory_loss += loss_dict["trajectory_loss"] * batch_size
+        total_kinetic_loss += loss_dict["kinetic_loss"] * batch_size
         total_samples += batch_size
         
-        return total_train_loss, total_physics_loss, total_trajectory_loss, total_samples
+        return total_train_loss, total_physics_loss, total_trajectory_loss, total_kinetic_loss, total_samples
     
     def _check_early_stopping(self, val_loss, epoch):
         """Check if early stopping criteria is met."""
@@ -276,10 +283,11 @@ class Trainer:
         total_loss = 0.0
         total_physics_loss = 0.0
         total_trajectory_loss = 0.0
+        total_kinetic_loss = 0.0
         total_samples = 0
         
         for batch in val_loader:
-            t, initial_state, state, point_type = batch
+            t, initial_state, state = batch
             t = t.view(-1, 1)
             
             # Detach and require grad for physics computation
@@ -289,7 +297,7 @@ class Trainer:
             with torch.enable_grad():
                 with self.accelerator.autocast():
                     loss, loss_dict = compute_loss(
-                        unwrapped_model, (t, initial_state, state, point_type),
+                        unwrapped_model, (t, initial_state, state),
                         trajectory_loss_ratio=self.config.trajectory_loss_ratio,
                         time_scale =self.config.time_scale , parameters_tensor=self.parameter_tensors
                     )
@@ -299,10 +307,11 @@ class Trainer:
             total_loss += loss.item() * batch_size
             total_physics_loss += loss_dict["physics_loss"] * batch_size
             total_trajectory_loss += loss_dict["trajectory_loss"] * batch_size
+            total_kinetic_loss += loss_dict["kinetic_loss"] * batch_size
             total_samples += batch_size
             
             # Explicitly delete tensors to free GPU memory
-            del loss, t, initial_state, state, point_type
+            del loss, t, initial_state, state
         
         if (torch.cuda.is_available()):
             torch.cuda.empty_cache()
@@ -311,38 +320,42 @@ class Trainer:
         total_loss = torch.tensor(total_loss, device=self.device)
         total_physics_loss = torch.tensor(total_physics_loss, device=self.device)
         total_trajectory_loss = torch.tensor(total_trajectory_loss, device=self.device)
+        total_kinetic_loss = torch.tensor(total_kinetic_loss, device=self.device)
         total_samples = torch.tensor(total_samples, device=self.device)
         
         total_loss = self.accelerator.gather(total_loss).sum().item()
         total_physics_loss = self.accelerator.gather(total_physics_loss).sum().item()
         total_trajectory_loss = self.accelerator.gather(total_trajectory_loss).sum().item()
+        total_kinetic_loss = self.accelerator.gather(total_kinetic_loss).sum().item()
         total_samples = self.accelerator.gather(total_samples).sum().item()
         
         avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
         avg_physics = total_physics_loss / total_samples if total_samples > 0 else 0.0
         avg_data = total_trajectory_loss / total_samples if total_samples > 0 else 0.0
+        avg_kinetic = total_kinetic_loss / total_samples if total_samples > 0 else 0.0
         
         return {
             "total_loss": avg_loss,
             "physics_loss": avg_physics,
-            "trajectory_loss": avg_data
+            "trajectory_loss": avg_data,
+            "kinetic_loss": avg_kinetic
         }
 
-    def _print_beautiful_log(self, epoch, train_loss, train_physics, train_data, val_metrics):
+    def _print_beautiful_log(self, epoch, train_loss, train_physics, train_trajectory, train_kinetic, val_metrics):
         """Print beautifully formatted training logs."""
         print("\n" + "="*80)
         print(f"{'Epoch':<15} {epoch}/{self.config.epochs}")
         print("="*80)
         
         # Header
-        print(f"{'Dataset':<15} {'Total Loss':<15} {'Physics Loss':<15} {'Data Loss':<15}")
+        print(f"{'Dataset':<15} {'Total Loss':<15} {'Physics Loss':<15} {'Data Loss':<15} {'Kinetic Loss':<15}")
         print("-"*80)
         
         # Training
-        print(f"{'Train':<15} {train_loss:<15.6f} {train_physics:<15.6f} {train_data:<15.6f}")
+        print(f"{'Train':<15} {train_loss:<15.6f} {train_physics:<15.6f} {train_trajectory:<15.6f} {train_kinetic:<15.6f}")
         
         # Validation
-        print(f"{'Validation':<15} {val_metrics['total_loss']:<15.6f} {val_metrics['physics_loss']:<15.6f} {val_metrics['trajectory_loss']:<15.6f}")
+        print(f"{'Validation':<15} {val_metrics['total_loss']:<15.6f} {val_metrics['physics_loss']:<15.6f} {val_metrics['trajectory_loss']:<15.6f} {val_metrics['kinetic_loss']:<15.6f}")
         
         print("="*80 + "\n")
     
@@ -421,6 +434,7 @@ class Trainer:
                     f.write("="*80 + "\n")
                     f.write(f"Total Loss:    {test_metrics['total_loss']:.6f}\n")
                     f.write(f"Physics Loss:  {test_metrics['physics_loss']:.6f}\n")
-                    f.write(f"Data Loss:     {test_metrics['trajectory_loss']:.6f}\n")
+                    f.write(f"Trajectory Loss:     {test_metrics['trajectory_loss']:.6f}\n")
+                    f.write(f"Kinetic Loss:     {test_metrics['kinetic_loss']:.6f}\n")
                     f.write("="*80 + "\n")
                 print(f"Test results saved to: {test_results_file}")
