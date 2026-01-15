@@ -66,6 +66,7 @@ def derive_double_pendulum_dynamics():
     R_sub = R.subs(substitutions).expand()
 
     qdd = [th1_ddot, th2_ddot]
+
     M, rest = sp.linear_eq_to_matrix(R_sub, qdd)
     M.simplify()
     rest.simplify()
@@ -136,7 +137,7 @@ def double_pendulum_derivatives(t, y, params):
     # Ensure rest is a 1D array
     rest = np.array(rest).flatten()
     
-    gamma = np.linalg.solve(M, -rest)
+    gamma = np.linalg.solve(M, rest)
 
     return np.array([omega1, omega2, gamma[0], gamma[1]])
 
