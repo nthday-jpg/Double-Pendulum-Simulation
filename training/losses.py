@@ -1,8 +1,8 @@
 import torch
-from physics.physics_loss import physics_residual, compute_derivatives
+from physics.physics_loss import physics_residual, compute_derivatives, trajectory_residual, kinetic_residual
 
-def compute_loss(model, batch, parameters_tensor, data_loss_ratio=1.0, time_scale=None, ):
-    t, initial_state, state, point_type = batch
+def compute_loss(model, batch, parameters_tensor, trajectory_loss_ratio=1.0, time_scale=None, ):
+    t, initial_state, state, qdot, point_type = batch
     
     # Ensure t is a leaf tensor with proper shape and requires grad
     t = t.detach().view(-1, 1).requires_grad_(True)
@@ -22,25 +22,21 @@ def compute_loss(model, batch, parameters_tensor, data_loss_ratio=1.0, time_scal
     # ---------- Physics loss (all points) ----------
     qdot_pred, qdd_pred = compute_derivatives(q_pred, t)
 
-    residual = physics_residual(q_pred, qdot_pred, qdd_pred, parameters_tensor, time_scale=time_scale)
-    # normalized by g to keep scale consistent
-    physics_loss = torch.mean((residual/parameters_tensor['g'])**2)
-    # ---------- Data loss (data points only) ----------
-    data_mask = (point_type == 0)
+    physic_res = physics_residual(q_pred, qdot_pred, qdd_pred, parameters_tensor, time_scale=time_scale)
+    kinetic_res = kinetic_residual(qdot_pred, qdot)
+    trajectory_res = trajectory_residual(q_pred, state)
 
-    if torch.any(data_mask):
-        q_data = state[data_mask]
-        q_pred_data = q_pred[data_mask]
-        data_loss = torch.mean((q_pred_data - q_data)**2)
-    else:
-        data_loss = torch.tensor(0.0, device=t.device)
+    kenetic_loss = torch.mean(kinetic_res**2) 
+    physics_loss = torch.mean(physic_res**2) 
+    trajectory_loss = torch.mean(trajectory_res**2)
 
     # ---------- Total ----------
-    total_loss = (1 - data_loss_ratio) * physics_loss + data_loss_ratio * data_loss
+    total_loss = (1 - trajectory_loss_ratio) * physics_loss + trajectory_loss_ratio * trajectory_loss
 
     loss_dict = {
         "physics_loss": physics_loss.item(),
-        "data_loss": data_loss.item()
+        "trajectory_loss": trajectory_loss.item(),
+        "kinetic_loss": kenetic_loss.item()
     }
 
     return total_loss, loss_dict

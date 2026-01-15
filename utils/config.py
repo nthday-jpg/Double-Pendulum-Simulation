@@ -61,7 +61,7 @@ class Config:
     l2_lambda: float = 0.0  # alternative to weight_decay
 
     # physics / PINN
-    data_loss_ratio: float = 0.1  # Fraction of total loss from data (rest is physics)
+    trajectory_loss_ratio: float = 0.1  # Fraction of total loss from data (rest is physics)
     residual_type: str = "lagrangian"  # eom | hamiltonian | lagrangian
 
     # logging

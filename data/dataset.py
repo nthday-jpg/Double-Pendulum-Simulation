@@ -14,7 +14,7 @@ class PendulumDataset(Dataset):
         t      : (1,)
         initial_state : (4,) = [theta1_0, theta2_0, omega1_0, omega2_0]
         state  : (2,) = [theta1, theta2]
-        point_type : 0 (data point)
+        qdot   : (2,) = [omega1, omega2]
     """
     def __init__(self, data_dir, normalize_time=True):
         """
@@ -45,7 +45,8 @@ class PendulumDataset(Dataset):
             trajectory = {
                 't': data["t"],              # (N,)
                 'initial_state': data["initial_state"],  # (4,)
-                'q': data["q"]               # (N, 2)
+                'q': data["q"],               # (N, 2)
+                'qdot': data["qdot"]          # (N, 2)
             }
             self.trajectories.append(trajectory)
             self.trajectory_lengths.append(len(data["t"]))
@@ -95,8 +96,8 @@ class PendulumDataset(Dataset):
             t = t_raw
         initial_state = torch.tensor(traj['initial_state'], dtype=torch.float32)
         state = torch.tensor(np.concatenate([traj['q'][local_idx]]), dtype=torch.float32)
-        return t, initial_state, state, 0  # point_type = 0 for data
-
+        qdot = torch.tensor(np.concatenate([traj['qdot'][local_idx]]), dtype=torch.float32)
+        return t, initial_state, state, qdot
 
 def get_dataloader(data_dir, config,
                    num_workers=None, shuffle=True):

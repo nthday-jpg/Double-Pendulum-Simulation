@@ -50,6 +50,20 @@ def compute_derivatives(q, t):
             
     return qdot, qdd
 
+def trajectory_residual(q_pred, q_true):
+    """
+        Enforces the trajectory matching: q_pred = q_true
+    """
+    residual = q_pred - q_true
+    return residual
+
+def kinetic_residual(qdot_pred, qdot_true):
+    """
+        Enforces the kinematic relationship: qdot = dq/dt
+    """
+    residual = qdot_pred - qdot_true
+    return residual
+
 def physics_residual(q, qdot, qdd, parameters_tensor, time_scale=None):
     """
         Computes the physics residual for the double pendulum dynamics
@@ -69,19 +83,18 @@ def physics_residual(q, qdot, qdd, parameters_tensor, time_scale=None):
     
     # Type assertion for Pylance
     assert M_fn is not None and C_fn is not None
-
+    T = 1.0
     if time_scale is not None:
         # Adjust for time normalization (t -> t / T)
         # d/dt = (1/T) d/d(t/T)  =>  d^2/dt^2 = (1/T^2) d^2/d(t/T)^2
         T = time_scale
         qdot = qdot / T
-        qdd = qdd / (T ** 2)
 
     M = M_fn(q[:, 0], q[:, 1], m1, m2, l1, l2)  # (N, 2, 2)
     C = C_fn(q[:, 0], q[:, 1], qdot[:, 0], qdot[:, 1], m1, m2, l1, l2, g)  # (N, 2)
 
     # Mqq=C
-    rhs = torch.linalg.solve(M, C.unsqueeze(-1)).squeeze(-1)
+    rhs = torch.linalg.solve(M, C.unsqueeze(-1)).squeeze(-1) * T**2  
     residual = qdd - rhs
         
     return residual
