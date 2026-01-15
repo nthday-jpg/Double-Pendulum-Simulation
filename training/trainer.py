@@ -45,11 +45,11 @@ class Trainer:
         # Assume all trajectories have same parameters for now
         self.parameters_list = parameters_list
         self.parameter_tensors = {
-            'm1': torch.tensor(parameters_list[0].m1, dtype=torch.float32, device=self.device),
-            'm2': torch.tensor(parameters_list[0].m2, dtype=torch.float32, device=self.device),
-            'l1': torch.tensor(parameters_list[0].l1, dtype=torch.float32, device=self.device),
-            'l2': torch.tensor(parameters_list[0].l2, dtype=torch.float32, device=self.device),
-            'g': torch.tensor(parameters_list[0].g, dtype=torch.float32, device=self.device),
+            'm1': torch.tensor(parameters_list[0]["m1"], dtype=torch.float32, device=self.device),
+            'm2': torch.tensor(parameters_list[0]["m2"], dtype=torch.float32, device=self.device),
+            'l1': torch.tensor(parameters_list[0]["l1"], dtype=torch.float32, device=self.device),
+            'l2': torch.tensor(parameters_list[0]["l2"], dtype=torch.float32, device=self.device),
+            'g': torch.tensor(parameters_list[0]["g"], dtype=torch.float32, device=self.device),
         }
 
         self.best_val_loss = float('inf')
