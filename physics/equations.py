@@ -8,7 +8,7 @@ def derive_double_pendulum_dynamics():
     """
         Assume two rigid rods with uniformly distributed mass connected in series.
         Returns the mass matrix M and the rest vector C such that:
-            Returns M(q) and rest(q, qdot) such that M*qdd + rest = 0
+            Returns M(q) and rest(q, qdot) such that M*qdd = C
     """
 
     # Define symbols
@@ -67,6 +67,7 @@ def derive_double_pendulum_dynamics():
 
     qdd = [th1_ddot, th2_ddot]
 
+    # This line return Mqdd = rest
     M, rest = sp.linear_eq_to_matrix(R_sub, qdd)
     M.simplify()
     rest.simplify()
@@ -137,7 +138,7 @@ def double_pendulum_derivatives(t, y, params):
     # Ensure rest is a 1D array
     rest = np.array(rest).flatten()
     
-    
+    # Mqdd = C
     gamma = np.linalg.solve(M, rest)
 
     return np.array([omega1, omega2, gamma[0], gamma[1]])
