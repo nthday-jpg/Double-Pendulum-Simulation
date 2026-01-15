@@ -194,6 +194,7 @@ def main():
         weight_decay=args.weight_decay,
         grad_clip=args.grad_clip,
         scheduler=args.scheduler,
+        scheduler_patience=args.scheduler_patience,
         
         # PyTorch optimizations
         use_compile=args.use_compile,
