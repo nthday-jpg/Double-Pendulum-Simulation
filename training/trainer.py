@@ -82,9 +82,7 @@ class Trainer:
             writer, csv_file, tb, run_dir = None, None, None, None
             self.run_dir = None
             self.best_model_path = ""
-        
-        self.accelerator.wait_for_everyone()
-        
+                
         epoch = 0
         
         if self.accelerator.is_main_process:
@@ -112,16 +110,10 @@ class Trainer:
                 avg_train_loss = total_train_loss / total_samples
                 avg_physics_loss = total_physics_loss / total_samples
                 avg_data_loss = total_data_loss / total_samples
-                
-                # Synchronize before validation
-                self.accelerator.wait_for_everyone()
-                
+
                 # Validation
                 val_metrics = self.evaluate(self.val_loader, prefix="val")
                 avg_val_loss = val_metrics["total_loss"]
-                
-                # Synchronize after validation
-                self.accelerator.wait_for_everyone()
                 
                 # Logging - only main process
                 if self.accelerator.is_main_process:
@@ -155,8 +147,7 @@ class Trainer:
                 if (epoch + 1) % getattr(self.config, 'test_interval', 50) == 0:
                     self.evaluate_test_set()
 
-                # Synchronize before early stopping check
-                self.accelerator.wait_for_everyone()
+                # Gather already synchronize implicitly
                 
                 # Early stopping check
                 if self._check_early_stopping(avg_val_loss, epoch):
