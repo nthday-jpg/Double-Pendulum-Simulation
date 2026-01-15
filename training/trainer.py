@@ -220,11 +220,11 @@ class Trainer:
     
     def _train_step(self, batch, total_train_loss, total_physics_loss, total_trajectory_loss, total_kinetic_loss, total_samples):
         """Single training step - shared between mixed and separate modes."""
-        t, initial_state, state = batch
+        t, initial_state, state, qdot = batch
         
         self.optimizer.zero_grad()
         loss, loss_dict = compute_loss(
-            self.model, (t, initial_state, state),
+            self.model, (t, initial_state, state, qdot),
             trajectory_loss_ratio=self.config.trajectory_loss_ratio,
             time_scale =self.config.time_scale, parameters_tensor=self.parameter_tensors
         )
@@ -287,7 +287,7 @@ class Trainer:
         total_samples = 0
         
         for batch in val_loader:
-            t, initial_state, state = batch
+            t, initial_state, state, qdot = batch
             t = t.view(-1, 1)
             
             # Detach and require grad for physics computation
@@ -297,7 +297,7 @@ class Trainer:
             with torch.enable_grad():
                 with self.accelerator.autocast():
                     loss, loss_dict = compute_loss(
-                        unwrapped_model, (t, initial_state, state),
+                        unwrapped_model, (t, initial_state, state, qdot),
                         trajectory_loss_ratio=self.config.trajectory_loss_ratio,
                         time_scale =self.config.time_scale , parameters_tensor=self.parameter_tensors
                     )
@@ -310,8 +310,6 @@ class Trainer:
             total_kinetic_loss += loss_dict["kinetic_loss"] * batch_size
             total_samples += batch_size
             
-            # Explicitly delete tensors to free GPU memory
-            del loss, t, initial_state, state
         
         if (torch.cuda.is_available()):
             torch.cuda.empty_cache()
