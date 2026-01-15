@@ -83,6 +83,6 @@ def physics_residual(q, qdot, qdd, parameters, time_scale=None):
 
     # Mqq=C
     rhs = torch.linalg.solve(M, C.unsqueeze(-1)).squeeze(-1)
-    residual = qdd + rhs
+    residual = qdd - rhs
         
     return residual
