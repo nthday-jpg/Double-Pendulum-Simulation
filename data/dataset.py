@@ -116,6 +116,7 @@ def get_dataloader(data_dir, config,
         train_loader: DataLoader for training data points (early time)
         val_loader: DataLoader for validation (early time)
         test_loader: DataLoader for test (late time - extrapolation)
+        parameters_list: List of parameter dicts for each trajectory
     """
     if num_workers is None:
         num_workers = min(8, os.cpu_count() or 1)
@@ -192,8 +193,10 @@ def get_dataloader(data_dir, config,
         generator=torch.Generator().manual_seed(config.seed)
     )
     
+    parameters_list = data_dataset.parameters_list
+
     print(f"DataLoaders: batch_size={batch_size}, workers={num_workers}")
     print(f"Dataset splits: train={train_size}, val={val_size}, test={len(test_indices)} (late time)")
     print(f"Temporal split: train/val use first {int((1-config.test_split)*100)}% of time, test uses last {int(config.test_split*100)}%")
     
-    return train_loader, val_loader, test_loader
+    return train_loader, val_loader, test_loader, parameters_list

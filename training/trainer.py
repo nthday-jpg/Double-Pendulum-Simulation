@@ -12,7 +12,7 @@ from utils.logging import init_run, save_checkpoint
 
 class Trainer:
     def __init__(self, model: PINN, config: Config,
-                 data_loader, val_loader, test_loader,
+                 data_loader, val_loader, test_loader, parameters_list,
                  optimizer, scheduler=None):
         """
         Trainer for PINN model using data_loss_ratio to balance physics and data losses.
@@ -41,6 +41,16 @@ class Trainer:
         
         self.scheduler = scheduler
         self.device = self.accelerator.device
+
+        # Assume all trajectories have same parameters for now
+        self.parameters_list = parameters_list
+        self.parameter_tensors = {
+            'm1': torch.tensor(parameters_list[0].m1, dtype=torch.float32, device=self.device),
+            'm2': torch.tensor(parameters_list[0].m2, dtype=torch.float32, device=self.device),
+            'l1': torch.tensor(parameters_list[0].l1, dtype=torch.float32, device=self.device),
+            'l2': torch.tensor(parameters_list[0].l2, dtype=torch.float32, device=self.device),
+            'g': torch.tensor(parameters_list[0].g, dtype=torch.float32, device=self.device),
+        }
 
         self.best_val_loss = float('inf')
         # Initialize on all processes to avoid None causing deadlocks
@@ -210,7 +220,7 @@ class Trainer:
         loss, loss_dict = compute_loss(
             self.model, (t, initial_state, state, point_type),
             data_loss_ratio=self.config.data_loss_ratio,
-            time_scale =self.config.time_scale
+            time_scale =self.config.time_scale, parameters_tensor=self.parameter_tensors
         )
         
         self.accelerator.backward(loss)
@@ -281,7 +291,7 @@ class Trainer:
                     loss, loss_dict = compute_loss(
                         unwrapped_model, (t, initial_state, state, point_type),
                         data_loss_ratio=self.config.data_loss_ratio,
-                        time_scale =self.config.time_scale ,
+                        time_scale =self.config.time_scale , parameters_tensor=self.parameter_tensors
                     )
             
             # Extract loss values and immediately free the computation graph

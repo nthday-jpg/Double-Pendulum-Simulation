@@ -50,7 +50,7 @@ def compute_derivatives(q, t):
             
     return qdot, qdd
 
-def physics_residual(q, qdot, qdd, parameters, time_scale=None):
+def physics_residual(q, qdot, qdd, parameters_tensor, time_scale=None):
     """
         Computes the physics residual for the double pendulum dynamics
         given q, qdot, qdd.
@@ -58,12 +58,11 @@ def physics_residual(q, qdot, qdd, parameters, time_scale=None):
         time_scale: float or None, if time normalization is used
     """
     # Convert parameters to tensors on same device as q
-    device = q.device
-    m1 = torch.tensor(parameters['m1'], dtype=q.dtype, device=device)
-    m2 = torch.tensor(parameters['m2'], dtype=q.dtype, device=device)
-    l1 = torch.tensor(parameters['l1'], dtype=q.dtype, device=device)
-    l2 = torch.tensor(parameters['l2'], dtype=q.dtype, device=device)
-    g = torch.tensor(parameters['g'], dtype=q.dtype, device=device)
+    m1 = parameters_tensor['m1']
+    m2 = parameters_tensor['m2']
+    l1 = parameters_tensor['l1']
+    l2 = parameters_tensor['l2']
+    g = parameters_tensor['g']
 
     M_fn = get_M_fn_torch()
     C_fn = get_C_fn_torch()

@@ -224,13 +224,6 @@ def main():
         # Early stopping
         early_stopping_patience=args.early_stopping_patience,
         early_stopping_min_delta=args.early_stopping_min_delta,
-
-        # Physical parameters
-        m1=args.m1,
-        m2=args.m2,
-        l1=args.l1,
-        l2=args.l2,
-        g=args.g
     )
     
     # Set seed for reproducibility
@@ -261,7 +254,7 @@ def main():
         )
 
     # Get data loaders
-    train_loader, val_loader, test_loader = get_dataloader(
+    train_loader, val_loader, test_loader, parameters_list = get_dataloader(
         data_dir=args.data_dir,
         config=cfg
     )
@@ -274,7 +267,8 @@ def main():
         val_loader=val_loader,
         test_loader=test_loader,
         optimizer=optimizer,
-        scheduler=scheduler
+        scheduler=scheduler,
+        parameters_list=parameters_list
     )
     
     # Train the model
