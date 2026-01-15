@@ -163,7 +163,7 @@ class Trainer:
                     break
                 
                 if self.scheduler:
-                    self.scheduler.step()
+                    self.scheduler.step(avg_val_loss)
         
         except Exception as e:
             # Log error to file for debugging
@@ -192,7 +192,7 @@ class Trainer:
                     unwrapped_model = self.model
                 if hasattr(self, 'run_dir') and self.run_dir:
                     save_checkpoint(unwrapped_model, self.optimizer, self.config, run_dir, epoch + 1,
-                                   time_scale =getattr(self.config, 'time_scale ', None))
+                                   time_scale=getattr(self.config, 'time_scale', None))
             raise  # Re-raise to see full traceback
         
         finally:
