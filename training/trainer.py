@@ -13,11 +13,12 @@ class Trainer:
                  data_loader, val_loader, test_loader, parameters_list,
                  optimizer, scheduler=None):
         """
-        Trainer for PINN model using trajectory_loss_ratio to balance physics and data losses.
         
         Usage:
             config.batch_size = 128
-            config.trajectory_loss_ratio = 0.1  # 10% data, 90% physics
+            config.physics_lambda = 1.0  # Weight for physics loss term
+            config.trajectory_lambda = 1.0  # Weight for trajectory loss term
+            config.kinetic_lambda = 1.0  # Weight for kinetic loss term
             train_loader, val_loader, test_loader = get_dataloader(...)
             trainer = Trainer(model, config, train_loader, val_loader, test_loader, optimizer)
         """
@@ -103,7 +104,7 @@ class Trainer:
             print("="*60, flush=True)
             print(f"Starting training for {self.config.epochs} epochs...", flush=True)
             print(f"Device: {self.device}", flush=True)
-            print(f"Batch size: {self.config.batch_size}, Trajectory loss ratio: {self.config.trajectory_loss_ratio:.2f}", flush=True)
+            print(f"Batch size: {self.config.batch_size}, Physics loss weight: {self.config.physics_lambda}, Trajectory loss weight: {self.config.trajectory_lambda}, Kinetic loss weight: {self.config.kinetic_lambda}", flush=True)
             print("="*60, flush=True)
         
         try:
