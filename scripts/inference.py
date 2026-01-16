@@ -93,8 +93,8 @@ def simulate_with_pinn(model, initial_state, t_span, num_points,
 
         qdot = torch.cat(qdot, dim=1)
 
-    q = q.detach().cpu().numpy()
-    qdot = qdot.detach().cpu().numpy()
+    q = q.detach().cpu().numpy() * time_scale  
+    qdot = qdot.detach().cpu().numpy() * time_scale
     return t, q, qdot
 
 
