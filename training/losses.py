@@ -23,7 +23,7 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, time_scale=None,
     qdot_pred, qdd_pred = compute_derivatives(q_pred, t)
 
     physic_res = physics_residual(q_pred, qdot_pred, qdd_pred, parameters_tensor, time_scale=time_scale)
-    kinetic_res = kinetic_residual(qdot_pred, qdot)
+    kinetic_res = kinetic_residual(qdot_pred, qdot, time_scale=time_scale)
     trajectory_res = trajectory_residual(q_pred, state)
 
     kenetic_loss = torch.mean(kinetic_res**2) 
