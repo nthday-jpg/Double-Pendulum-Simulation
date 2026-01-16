@@ -381,7 +381,8 @@ class Trainer:
             print("-"*80)
             print(f"{'Total Loss':<30} {test_metrics['total_loss']:<15.6f}")
             print(f"{'Physics Loss':<30} {test_metrics['physics_loss']:<15.6f}")
-            print(f"{'Data Loss':<30} {test_metrics['trajectory_loss']:<15.6f}")
+            print(f"{'Trajectory Loss':<30} {test_metrics['trajectory_loss']:<15.6f}")
+            print(f"{'Kinetic Loss':<30} {test_metrics['kinetic_loss']:<15.6f}")
             print("="*80 + "\n")
             
             # Save test results to file if run_dir is available
