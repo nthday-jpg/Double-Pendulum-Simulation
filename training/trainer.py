@@ -27,6 +27,12 @@ class Trainer:
         )
         
         self.config = config
+
+        self.loss_weights = {
+            'physics_lambda': config.physics_lambda,
+            'trajectory_lambda': config.trajectory_lambda,
+            'kinetic_lambda': config.kinetic_lambda
+        }
         
         # Disable torch.compile for PINNs (incompatible with double backward)
         if getattr(config, 'use_compile', False):
@@ -222,7 +228,7 @@ class Trainer:
         self.optimizer.zero_grad()
         loss, loss_dict = compute_loss(
             self.model, (t, initial_state, state, qdot),
-            trajectory_loss_ratio=self.config.trajectory_loss_ratio,
+            loss_weights=self.loss_weights,
             time_scale =self.config.time_scale, parameters_tensor=self.parameter_tensors
         )
         
@@ -295,7 +301,7 @@ class Trainer:
                 with self.accelerator.autocast():
                     loss, loss_dict = compute_loss(
                         unwrapped_model, (t, initial_state, state, qdot),
-                        trajectory_loss_ratio=self.config.trajectory_loss_ratio,
+                        loss_weights=self.loss_weights,
                         time_scale =self.config.time_scale , parameters_tensor=self.parameter_tensors
                     )
             

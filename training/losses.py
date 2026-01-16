@@ -1,7 +1,7 @@
 import torch
 from physics.physics_loss import physics_residual, compute_derivatives, trajectory_residual, kinetic_residual
 
-def compute_loss(model, batch, parameters_tensor, trajectory_loss_ratio=1.0, time_scale=None, ):
+def compute_loss(model, batch, parameters_tensor, loss_weights, time_scale=None, ):
     t, initial_state, state, qdot = batch
     
     # Ensure t is a leaf tensor with proper shape and requires grad
@@ -31,7 +31,7 @@ def compute_loss(model, batch, parameters_tensor, trajectory_loss_ratio=1.0, tim
     trajectory_loss = torch.mean(trajectory_res**2)
 
     # ---------- Total ----------
-    total_loss = (1 - trajectory_loss_ratio) * kenetic_loss + trajectory_loss_ratio * trajectory_loss
+    total_loss = loss_weights['physics_lambda'] * physics_loss + loss_weights['trajectory_lambda'] * trajectory_loss + loss_weights['kinetic_lambda'] * kenetic_loss
 
     loss_dict = {
         "physics_loss": physics_loss.item(),
