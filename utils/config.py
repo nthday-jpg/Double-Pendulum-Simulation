@@ -44,11 +44,6 @@ class Config:
     scheduler: bool = True
     scheduler_patience: int = 10  # for plateau scheduler
     
-    # torch compile (PyTorch 2.0+)
-    # Note: Disabled for PINNs due to double backward incompatibility
-    use_compile: bool = False  # Enable torch.compile() for speedup
-    compile_mode: str = "default"  # default | reduce-overhead | max-autotune
-    
     # accelerate
     mixed_precision: bool = False  # Enable FP16 mixed precision training
     gradient_accumulation_steps: int = 1  # Gradient accumulation for larger effective batch size
