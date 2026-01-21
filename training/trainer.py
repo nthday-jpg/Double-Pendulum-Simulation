@@ -35,10 +35,6 @@ class Trainer:
             'kinetic_lambda': config.kinetic_lambda
         }
         
-        # Disable torch.compile for PINNs (incompatible with double backward)
-        if getattr(config, 'use_compile', False):
-            print("⚠ torch.compile disabled: incompatible with PINN double backward")
-        
         # Prepare model, optimizer, and dataloaders
         self.model, self.optimizer, self.data_loader, self.val_loader, self.test_loader = self.accelerator.prepare(
             model, optimizer, data_loader, val_loader, test_loader

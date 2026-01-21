@@ -94,11 +94,6 @@ def parse_args():
                         help='Patience for learning rate scheduler')
     
     # PyTorch optimizations
-    parser.add_argument('--use_compile', action='store_true',
-                        help='Use torch.compile (disabled for PINNs)')
-    parser.add_argument('--compile_mode', type=str, default='default',
-                        choices=['default', 'reduce-overhead', 'max-autotune'],
-                        help='Compile mode')
     parser.add_argument('--mixed_precision', action='store_true',
                         help='Enable FP16 mixed precision')
     parser.add_argument('--gradient_accumulation_steps', type=int, default=1,
@@ -201,8 +196,6 @@ def main():
         scheduler_patience=args.scheduler_patience,
         
         # PyTorch optimizations
-        use_compile=args.use_compile,
-        compile_mode=args.compile_mode,
         mixed_precision=args.mixed_precision,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         
