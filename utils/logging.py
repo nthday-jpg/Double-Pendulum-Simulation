@@ -92,21 +92,21 @@ def plot_losses(run_dir):
     print(f"Loss plot saved to: {plot_path}")
     plt.close()
 
-def print_beautiful_log(config, epoch, train_loss, train_physics, train_trajectory, val_metrics):
+def print_beautiful_log(config, epoch, train_loss, train_physics, train_trajectory, train_ic, val_metrics):
         """Print beautifully formatted training logs."""
         print("\n" + "="*80)
         print(f"{'Epoch':<15} {epoch}/{config.epochs}")
         print("="*80)
         
         # Header
-        print(f"{'Dataset':<15} {'Total Loss':<15} {'Physics Loss':<15} {'Data Loss':<15}")
+        print(f"{'Dataset':<15} {'Total Loss':<15} {'Physics Loss':<15} {'Data Loss':<15} {'IC Loss':<15}")
         print("-"*80)
         
         # Training
-        print(f"{'Train':<15} {train_loss:<15.6f} {train_physics:<15.6f} {train_trajectory:<15.6f}")
+        print(f"{'Train':<15} {train_loss:<15.6f} {train_physics:<15.6f} {train_trajectory:<15.6f} {train_ic:<15.6f}")
         
         # Validation
-        print(f"{'Validation':<15} {val_metrics['total_loss']:<15.6f} {val_metrics['physics_loss']:<15.6f} {val_metrics['trajectory_loss']:<15.6f}")
+        print(f"{'Validation':<15} {val_metrics['total_loss']:<15.6f} {val_metrics['physics_loss']:<15.6f} {val_metrics['trajectory_loss']:<15.6f} {val_metrics['ic_loss']:<15.6f}")
         
         print("="*80 + "\n")
     

@@ -20,20 +20,22 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
     if q_pred.grad_fn is None:
         raise RuntimeError("q_pred has no grad_fn. The model is detaching the output!")
 
-    # ---------- Physics loss (all points) ----------
     qdot_pred, qdd_pred = compute_derivatives(q_pred, t)
 
     physic_res = physics_residual(q_pred, qdot_pred, qdd_pred, parameters_tensor, time_scale=time_scale)
-    trajectory_res = trajectory_residual(q_pred, state)
     physics_loss = torch.mean(physic_res**2 * residual_weights[segment_idx].unsqueeze(-1)) # (N, 2) * (N, 1) broadcast res -> (N, 2)
+    
+    trajectory_res = trajectory_residual(q_pred, state)
     trajectory_loss = torch.mean(trajectory_res**2)
 
-    # ---------- Total ----------
-    total_loss = loss_weights['physics_lambda'] * physics_loss + loss_weights['trajectory_lambda'] * trajectory_loss 
+    ic_loss = torch.mean((q_pred[0] - initial_state)**2)
+
+    total_loss = loss_weights['physics_lambda'] * physics_loss + loss_weights['trajectory_lambda'] * trajectory_loss + loss_weights['ic_lambda'] * ic_loss
 
     loss_dict = {
         "physics_loss": physics_loss.item(),
         "trajectory_loss": trajectory_loss.item(),
+        "ic_loss": ic_loss.item(),
     }
 
     # Compute per-segment residual losses for temporal weight updates (vectorized for parallel training)
