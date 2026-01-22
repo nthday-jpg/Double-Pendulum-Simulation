@@ -120,6 +120,8 @@ def parse_args():
                         help='Weight for physics loss term')
     parser.add_argument('--trajectory_lambda', type=float, default=1.0,
                         help='Weight for trajectory loss term')
+    parser.add_argument('--ic_lambda', type=float, default=1.0,
+                        help='Weight for initial condition loss term')
     parser.add_argument('--residual_type', type=str, default='lagrangian',
                         choices=['eom', 'lagrangian', 'hamiltonian'],
                         help='Type of physics residual')
@@ -215,6 +217,7 @@ def main():
         # Physics / PINN
         physics_lambda=args.physics_lambda,
         trajectory_lambda=args.trajectory_lambda,
+        ic_lambda=args.ic_lambda,
         residual_type=args.residual_type,
         
         # Logging
