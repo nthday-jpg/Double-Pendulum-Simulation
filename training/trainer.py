@@ -122,11 +122,17 @@ class Trainer:
                 
                 # w_i = exp(-epsilon * sum_{k=1}^{i-1} L_r^k)
                 with torch.no_grad():
-                    # Gather and ensure proper shape (num_processes, time_segments) -> (time_segments,)
+                    # Gather across all processes - shape: (num_processes, time_segments) or (time_segments,)
                     gathered_segment_losses = self.accelerator.gather(epoch_segment_losses)
                     gathered_segment_counts = self.accelerator.gather(segment_counts)
                     
-                    # Sum across processes if multi-GPU, otherwise just use the tensor
+                    # Reshape to (num_processes, time_segments) if flattened
+                    if gathered_segment_losses.dim() == 1 and gathered_segment_losses.numel() > self.config.time_segments:
+                        num_processes = gathered_segment_losses.numel() // self.config.time_segments
+                        gathered_segment_losses = gathered_segment_losses.view(num_processes, self.config.time_segments)
+                        gathered_segment_counts = gathered_segment_counts.view(num_processes, self.config.time_segments)
+                    
+                    # Sum across processes
                     if gathered_segment_losses.dim() > 1:
                         epoch_segment_losses = gathered_segment_losses.sum(dim=0)
                         segment_counts = gathered_segment_counts.sum(dim=0)
@@ -134,16 +140,16 @@ class Trainer:
                         epoch_segment_losses = gathered_segment_losses
                         segment_counts = gathered_segment_counts
                     
-                    # Ensure 1D shape
-                    epoch_segment_losses = epoch_segment_losses.view(-1)
-                    segment_counts = segment_counts.view(-1)
-                    
+                    # Compute average losses per segment
                     avg_segment_losses = epoch_segment_losses / (segment_counts + 1e-8)
                     
+                    # Cumulative sum for temporal weighting
                     cumulative_losses = torch.cumsum(avg_segment_losses, dim=0)
                     
+                    # Update weights: w_0 = 1, w_i = exp(-epsilon * sum_{k=0}^{i-1} L_k)
                     self.residual_weights[0] = 1.0  
-                    self.residual_weights[1:] = torch.exp(-self.config.epsilon * cumulative_losses[:-1])
+                    if cumulative_losses.numel() > 1:
+                        self.residual_weights[1:] = torch.exp(-self.config.epsilon * cumulative_losses[:-1])
 
                 # Validation
                 val_metrics = self.evaluate(self.val_loader, prefix="val")
