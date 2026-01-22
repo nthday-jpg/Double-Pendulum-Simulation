@@ -7,16 +7,12 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
     # Ensure proper tensor shapes
     t = t.detach().view(-1, 1).requires_grad_(True)  # (N, 1)
     segment_idx = segment_idx.view(-1)  # (N,) - ensure 1D
-    
-    # Prepare initial_state for model input
-    initial_state = initial_state.detach()  # (batch_size, 4)
+    initial_state = initial_state.detach()  # (N, 4)
 
-    # Forward pass with time and initial state as input
-    # Concatenate t and initial_state: (batch_size, 5)
+    # ========== FORWARD PASS (batch points) ==========
     model_input = torch.cat([t, initial_state], dim=1)
     q_pred = model(model_input)  # (N, 2)
     
-    # Verification: ensure gradient graph exists
     if q_pred.grad_fn is None:
         raise RuntimeError("q_pred has no grad_fn. The model is detaching the output!")
 
@@ -28,9 +24,26 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
     trajectory_res = trajectory_residual(q_pred, state)
     trajectory_loss = torch.mean(trajectory_res**2)
 
-    ic_loss = torch.mean((q_pred[0] - initial_state)**2)
+    # ========== IC LOSS (SEPARATE FORWARD PASS at t=0) ==========
+    # Evaluate IC for all points: forward pass at t=0 with their initial states
+    # This is fully vectorized and parallel-training friendly
+    t_zero = torch.zeros_like(t, requires_grad=True)
+    
+    ic_input = torch.cat([t_zero, initial_state], dim=1)
+    q_ic_pred = model(ic_input)  # (N, 2)
+    
+    # Compute derivatives at t=0
+    qdot_ic_pred, _ = compute_derivatives(q_ic_pred, t_zero)
+    
+    # IC loss: position + velocity at t=0
+    ic_position_loss = torch.mean((q_ic_pred - initial_state[:, :2])**2)
+    ic_velocity_loss = torch.mean((qdot_ic_pred - initial_state[:, 2:])**2)
+    ic_loss = ic_position_loss + ic_velocity_loss
 
-    total_loss = loss_weights['physics_lambda'] * physics_loss + loss_weights['trajectory_lambda'] * trajectory_loss + loss_weights['ic_lambda'] * ic_loss
+    # ========== TOTAL LOSS ==========
+    total_loss = (loss_weights['physics_lambda'] * physics_loss + 
+                  loss_weights['trajectory_lambda'] * trajectory_loss + 
+                  loss_weights['ic_lambda'] * ic_loss)
 
     loss_dict = {
         "physics_loss": physics_loss.item(),
@@ -38,19 +51,14 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
         "ic_loss": ic_loss.item(),
     }
 
-    # Compute per-segment residual losses for temporal weight updates (vectorized for parallel training)
+    # ========== SEGMENT LOSSES ==========
     segment_losses = None
     if num_segments is not None:
-        # Compute squared residuals: (N, 2) -> (N,)
-        squared_res = torch.mean(physic_res**2, dim=1)  # Average over output dimensions
-        
-        # Use scatter_add for efficient parallel computation
+        squared_res = torch.mean(physic_res**2, dim=1)
         segment_losses = torch.zeros(num_segments, device=physic_res.device)
         segment_counts = torch.zeros(num_segments, device=physic_res.device)
         segment_losses.scatter_add_(0, segment_idx, squared_res)
         segment_counts.scatter_add_(0, segment_idx, torch.ones_like(squared_res))
-        
-        # Avoid division by zero
         segment_losses = segment_losses / (segment_counts + 1e-8)
 
     return total_loss, loss_dict, segment_losses
