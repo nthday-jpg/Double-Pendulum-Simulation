@@ -104,9 +104,9 @@ class Trainer:
                 total_trajectory_loss = 0.0
                 total_samples = 0
                 
-                # Accumulator for segment losses across batches
-                epoch_segment_losses = torch.zeros(self.config.time_segments, device=self.device)
-                segment_counts = torch.zeros(self.config.time_segments, device=self.device)
+                # Accumulator for segment losses across batches - explicit shape (time_segments,)
+                epoch_segment_losses = torch.zeros((self.config.time_segments,), dtype=torch.float32, device=self.device)
+                segment_counts = torch.zeros((self.config.time_segments,), dtype=torch.float32, device=self.device)
                 
                 # Process all data batches
                 for data_batch in self.data_loader:
@@ -122,33 +122,28 @@ class Trainer:
                 
                 # w_i = exp(-epsilon * sum_{k=1}^{i-1} L_r^k)
                 with torch.no_grad():
-                    # Gather across all processes - shape: (num_processes, time_segments) or (time_segments,)
-                    gathered_segment_losses = self.accelerator.gather(epoch_segment_losses)
-                    gathered_segment_counts = self.accelerator.gather(segment_counts)
-                    
-                    # Reshape to (num_processes, time_segments) if flattened
-                    if gathered_segment_losses.dim() == 1 and gathered_segment_losses.numel() > self.config.time_segments:
-                        num_processes = gathered_segment_losses.numel() // self.config.time_segments
-                        gathered_segment_losses = gathered_segment_losses.view(num_processes, self.config.time_segments)
-                        gathered_segment_counts = gathered_segment_counts.view(num_processes, self.config.time_segments)
-                    
-                    # Sum across processes
-                    if gathered_segment_losses.dim() > 1:
-                        epoch_segment_losses = gathered_segment_losses.sum(dim=0)
-                        segment_counts = gathered_segment_counts.sum(dim=0)
-                    else:
-                        epoch_segment_losses = gathered_segment_losses
-                        segment_counts = gathered_segment_counts
-                    
-                    # Compute average losses per segment
-                    avg_segment_losses = epoch_segment_losses / (segment_counts + 1e-8)
-                    
-                    # Cumulative sum for temporal weighting
-                    cumulative_losses = torch.cumsum(avg_segment_losses, dim=0)
-                    
-                    # Update weights: w_0 = 1, w_i = exp(-epsilon * sum_{k=0}^{i-1} L_k)
-                    self.residual_weights[0] = 1.0  
-                    if cumulative_losses.numel() > 1:
+                    # Ensure proper shape before gathering: (time_segments,)
+                    if epoch_segment_losses is not None and segment_counts is not None:
+                        epoch_segment_losses = epoch_segment_losses.view(self.config.time_segments)
+                        segment_counts = segment_counts.view(self.config.time_segments)
+                        
+                        # Gather across all processes - accelerator.gather concatenates along dim 0
+                        # Result: (num_processes * time_segments,) for multi-GPU or (time_segments,) for single GPU
+                        gathered_segment_losses = self.accelerator.gather(epoch_segment_losses)
+                        gathered_segment_counts = self.accelerator.gather(segment_counts)
+                        
+                        # Reshape to (num_processes, time_segments) and sum
+                        gathered_segment_losses = gathered_segment_losses.view(-1, self.config.time_segments).sum(dim=0)
+                        gathered_segment_counts = gathered_segment_counts.view(-1, self.config.time_segments).sum(dim=0)
+                        
+                        # Compute average losses per segment: (time_segments,)
+                        avg_segment_losses = gathered_segment_losses / (gathered_segment_counts + 1e-8)
+                        
+                        # Cumulative sum for temporal weighting: (time_segments,)
+                        cumulative_losses = torch.cumsum(avg_segment_losses, dim=0)
+                        
+                        # Update weights: w_0 = 1, w_i = exp(-epsilon * sum_{k=0}^{i-1} L_k)
+                        self.residual_weights[0] = 1.0  
                         self.residual_weights[1:] = torch.exp(-self.config.epsilon * cumulative_losses[:-1])
 
                 # Validation
@@ -268,9 +263,12 @@ class Trainer:
         total_trajectory_loss += loss_dict["trajectory_loss"] * batch_size
         total_samples += batch_size
         
-        # Accumulate segment losses for temporal weight update (no loop needed - already averaged in compute_loss)
+        # Accumulate segment losses for temporal weight update
+        # segment_losses shape: (time_segments,) - already averaged per segment in compute_loss
         if segment_losses is not None and epoch_segment_losses is not None and segment_counts is not None:
             with torch.no_grad():
+                # Ensure proper shape before accumulation
+                segment_losses = segment_losses.view(self.config.time_segments)
                 epoch_segment_losses += segment_losses
                 segment_counts += 1  # Count batches per segment
         

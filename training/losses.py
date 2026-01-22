@@ -4,8 +4,9 @@ from physics.physics_loss import physics_residual, compute_derivatives, trajecto
 def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights, time_scale=None, num_segments=None):
     t, initial_state, state, qdot, segment_idx = batch
     
-    # Ensure t is a leaf tensor with proper shape and requires grad
-    t = t.detach().view(-1, 1).requires_grad_(True)
+    # Ensure proper tensor shapes
+    t = t.detach().view(-1, 1).requires_grad_(True)  # (N, 1)
+    segment_idx = segment_idx.view(-1)  # (N,) - ensure 1D
     
     # Prepare initial_state for model input
     initial_state = initial_state.detach()  # (batch_size, 4)
@@ -40,8 +41,6 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
     if num_segments is not None:
         # Compute squared residuals: (N, 2) -> (N,)
         squared_res = torch.mean(physic_res**2, dim=1)  # Average over output dimensions
-        
-        segment_idx = segment_idx.flatten()
         
         # Use scatter_add for efficient parallel computation
         segment_losses = torch.zeros(num_segments, device=physic_res.device)
