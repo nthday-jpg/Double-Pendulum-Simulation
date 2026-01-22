@@ -30,7 +30,7 @@ class Config:
     dropout_rate: float = 0.0
     final_activation: str | None = None  # None | tanh | sigmoid
     
-    # Input/output dimensions (auto-detect from data, but can override)
+    #input/output dimensions
     input_dim: int | None = None
     output_dim: int | None = None
 
@@ -58,8 +58,11 @@ class Config:
     # physics / PINN
     physics_lambda: float = 1.0  # Weight for physics loss term
     trajectory_lambda: float = 1.0  # Weight for trajectory loss term
-    kinetic_lambda: float = 1.0  # Weight for kinetic loss term
     residual_type: str = "lagrangian"  # eom | hamiltonian | lagrangian
+    
+    # Temporal weight updates
+    epsilon: float = 0.1  # Hyperparameter for exponential temporal weighting (equation 2.11)
+    time_segments: int = 10  # Number of time segments to split each trajectory into
 
     # logging
     log_interval: int = 10  # Log metrics to CSV/TensorBoard every N epochs (1 = every epoch)

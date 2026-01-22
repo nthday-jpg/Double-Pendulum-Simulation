@@ -1,8 +1,8 @@
 import torch
-from physics.physics_loss import physics_residual, compute_derivatives, trajectory_residual, kinetic_residual
+from physics.physics_loss import physics_residual, compute_derivatives, trajectory_residual
 
-def compute_loss(model, batch, parameters_tensor, loss_weights, time_scale=None, ):
-    t, initial_state, state, qdot = batch
+def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights, time_scale=None, num_segments=None):
+    t, initial_state, state, qdot, segment_idx = batch
     
     # Ensure t is a leaf tensor with proper shape and requires grad
     t = t.detach().view(-1, 1).requires_grad_(True)
@@ -23,20 +23,31 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, time_scale=None,
     qdot_pred, qdd_pred = compute_derivatives(q_pred, t)
 
     physic_res = physics_residual(q_pred, qdot_pred, qdd_pred, parameters_tensor, time_scale=time_scale)
-    kinetic_res = kinetic_residual(qdot_pred, qdot, time_scale=time_scale)
     trajectory_res = trajectory_residual(q_pred, state)
-
-    kenetic_loss = torch.mean(kinetic_res**2) 
-    physics_loss = torch.mean(physic_res**2) 
+    physics_loss = torch.mean(physic_res**2 * residual_weights[segment_idx].unsqueeze(-1)) # (N, 2) * (N, 1) broadcast res -> (N, 2)
     trajectory_loss = torch.mean(trajectory_res**2)
 
     # ---------- Total ----------
-    total_loss = loss_weights['physics_lambda'] * physics_loss + loss_weights['trajectory_lambda'] * trajectory_loss + loss_weights['kinetic_lambda'] * kenetic_loss
+    total_loss = loss_weights['physics_lambda'] * physics_loss + loss_weights['trajectory_lambda'] * trajectory_loss 
 
     loss_dict = {
         "physics_loss": physics_loss.item(),
         "trajectory_loss": trajectory_loss.item(),
-        "kinetic_loss": kenetic_loss.item()
     }
 
-    return total_loss, loss_dict
+    # Compute per-segment residual losses for temporal weight updates (vectorized for parallel training)
+    segment_losses = None
+    if num_segments is not None:
+        # Compute squared residuals: (N, 2) -> (N,)
+        squared_res = torch.mean(physic_res**2, dim=1)  # Average over output dimensions
+        
+        # Use scatter_add for efficient parallel computation
+        segment_losses = torch.zeros(num_segments, device=physic_res.device)
+        segment_counts = torch.zeros(num_segments, device=physic_res.device)
+        segment_losses.scatter_add_(0, segment_idx, squared_res)
+        segment_counts.scatter_add_(0, segment_idx, torch.ones_like(squared_res))
+        
+        # Avoid division by zero
+        segment_losses = segment_losses / (segment_counts + 1e-8)
+
+    return total_loss, loss_dict, segment_losses

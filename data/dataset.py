@@ -16,13 +16,12 @@ class PendulumDataset(Dataset):
         state  : (2,) = [theta1, theta2]
         qdot   : (2,) = [omega1, omega2]
     """
-    def __init__(self, data_dir, normalize_time=True):
+    def __init__(self, data_dir, time_segments=10, normalize_time=True):
         """
         Args:
             data_dir: Directory containing trajectory files (trajectory_000.npz, trajectory_001.npz, ...)
                      and corresponding parameter files (parameters_000.json, parameters_001.json, ...)
         """
-        self.normalize_time = normalize_time
 
         # Load all trajectory files
         self.trajectories = []
@@ -59,19 +58,22 @@ class PendulumDataset(Dataset):
                     self.parameters_list.append(json.load(f))
             else:
                 raise FileNotFoundError(f"Parameter file not found: {params_file}")
-        
+
         self.total_length = self.cumulative_lengths[-1]
 
+        # Time segmentation setup
+        self.max_t = max(np.max(traj['t']) for traj in self.trajectories)
+        self.time_segments = time_segments
+        self.time_buckets = torch.linspace(0, self.max_t, time_segments + 1)    
+
+        # Time normalization setup
+        self.normalize_time = normalize_time
         if self.normalize_time:
             # Assume all trajectories share the same time scale for normalization
             # Nondimensionalize time using characteristic time scale T = sqrt((l1 + l2) / (2g))
             char_parameter = self.parameters_list[0]
             self.time_scale = np.sqrt((char_parameter['l1'] + char_parameter['l2']) / (2*char_parameter['g']))
-        
-        # Check if all parameters are the same
-        all_same = all(p == self.parameters_list[0] for p in self.parameters_list)
-        params_msg = "with shared parameters" if all_same else "with different parameters"
-        print(f"📊 Loaded {len(self.trajectories)} trajectories {params_msg}, {self.total_length} total data points")
+
 
     def __len__(self):
         return self.total_length
@@ -97,7 +99,11 @@ class PendulumDataset(Dataset):
         initial_state = torch.tensor(traj['initial_state'], dtype=torch.float32)
         state = torch.tensor(np.concatenate([traj['q'][local_idx]]), dtype=torch.float32)
         qdot = torch.tensor(np.concatenate([traj['qdot'][local_idx]]), dtype=torch.float32)
-        return t, initial_state, state, qdot
+        
+        segment_idx = torch.bucketize(t_raw, self.time_buckets)
+        segment_idx = torch.clamp(segment_idx, 1, self.time_segments) - 1  # ensure in [0, time_segments-1]
+
+        return t, initial_state, state, qdot, segment_idx
 
 def get_dataloader(data_dir, config,
                    num_workers=None, shuffle=True):
@@ -125,8 +131,9 @@ def get_dataloader(data_dir, config,
             num_workers = 0
     
     batch_size = config.batch_size
+    time_segments = config.time_segments
 
-    data_dataset = PendulumDataset(data_dir, normalize_time=config.normalize_time)
+    data_dataset = PendulumDataset(data_dir, normalize_time=config.normalize_time, time_segments=time_segments)
 
     train_val_indices = []
     test_indices = []

@@ -12,16 +12,7 @@ class Trainer:
     def __init__(self, model: PINN, config: Config,
                  data_loader, val_loader, test_loader, parameters_list,
                  optimizer, scheduler=None):
-        """
         
-        Usage:
-            config.batch_size = 128
-            config.physics_lambda = 1.0  # Weight for physics loss term
-            config.trajectory_lambda = 1.0  # Weight for trajectory loss term
-            config.kinetic_lambda = 1.0  # Weight for kinetic loss term
-            train_loader, val_loader, test_loader = get_dataloader(...)
-            trainer = Trainer(model, config, train_loader, val_loader, test_loader, optimizer)
-        """
         self.accelerator = Accelerator(
             mixed_precision='fp16' if hasattr(config, 'mixed_precision') and config.mixed_precision else 'no',
             gradient_accumulation_steps=getattr(config, 'gradient_accumulation_steps', 1)
@@ -32,7 +23,6 @@ class Trainer:
         self.loss_weights = {
             'physics_lambda': config.physics_lambda,
             'trajectory_lambda': config.trajectory_lambda,
-            'kinetic_lambda': config.kinetic_lambda
         }
         
         # Prepare model, optimizer, and dataloaders
@@ -57,7 +47,9 @@ class Trainer:
         # Initialize on all processes to avoid None causing deadlocks
         self.best_model_path = ""
         self.patience_counter = 0
-        
+
+        self.residual_weights = torch.ones(config.time_segments, device=self.device)
+
         # Check and load checkpoint if provided
         if hasattr(config, 'checkpoint_path') and config.checkpoint_path:
             if os.path.exists(config.checkpoint_path):
@@ -100,7 +92,8 @@ class Trainer:
             print("="*60, flush=True)
             print(f"Starting training for {self.config.epochs} epochs...", flush=True)
             print(f"Device: {self.device}", flush=True)
-            print(f"Batch size: {self.config.batch_size}, Physics loss weight: {self.config.physics_lambda}, Trajectory loss weight: {self.config.trajectory_lambda}, Kinetic loss weight: {self.config.kinetic_lambda}", flush=True)
+            print(f"Batch size: {self.config.batch_size}, Physics loss weight: {self.config.physics_lambda}, Trajectory loss weight: {self.config.trajectory_lambda}", flush=True)
+            print(f"Temporal weighting: epsilon={self.config.epsilon}, segments={self.config.time_segments}", flush=True)
             print("="*60, flush=True)
         
         try:
@@ -109,20 +102,35 @@ class Trainer:
                 total_train_loss = 0.0
                 total_physics_loss = 0.0
                 total_trajectory_loss = 0.0
-                total_kinetic_loss = 0.0
                 total_samples = 0
+                
+                # Accumulator for segment losses across batches
+                epoch_segment_losses = torch.zeros(self.config.time_segments, device=self.device)
+                segment_counts = torch.zeros(self.config.time_segments, device=self.device)
                 
                 # Process all data batches
                 for data_batch in self.data_loader:
-                    total_train_loss, total_physics_loss, total_trajectory_loss, total_kinetic_loss, total_samples = self._train_step(
-                        data_batch, total_train_loss, total_physics_loss, total_trajectory_loss, total_kinetic_loss, total_samples
+                    total_train_loss, total_physics_loss, total_trajectory_loss, total_samples, epoch_segment_losses, segment_counts = self._train_step(
+                        data_batch, total_train_loss, total_physics_loss, total_trajectory_loss, total_samples,
+                        epoch_segment_losses, segment_counts
                     )
                 
                 # Compute epoch averages
                 avg_train_loss = total_train_loss / total_samples
                 avg_physics_loss = total_physics_loss / total_samples
                 avg_trajectory_loss = total_trajectory_loss / total_samples
-                avg_kinetic_loss = total_kinetic_loss / total_samples
+                
+                # w_i = exp(-epsilon * sum_{k=1}^{i-1} L_r^k)
+                with torch.no_grad():
+                    epoch_segment_losses = self.accelerator.gather(epoch_segment_losses).sum(dim=0)
+                    segment_counts = self.accelerator.gather(segment_counts).sum(dim=0)
+                    
+                    avg_segment_losses = epoch_segment_losses / (segment_counts + 1e-8)
+                    
+                    cumulative_losses = torch.cumsum(avg_segment_losses, dim=0)
+                    
+                    self.residual_weights[0] = 1.0  
+                    self.residual_weights[1:] = torch.exp(-self.config.epsilon * cumulative_losses[:-1])
 
                 # Validation
                 val_metrics = self.evaluate(self.val_loader, prefix="val")
@@ -140,8 +148,6 @@ class Trainer:
                             "val_loss": avg_val_loss,
                             "val_physics": val_metrics["physics_loss"],
                             "val_trajectory": val_metrics["trajectory_loss"],
-                            "train_kinetic": avg_kinetic_loss,
-                            "val_kinetic": val_metrics["kinetic_loss"]
                         }
                         
                         writer.writerow(log_dict) # type: ignore
@@ -150,15 +156,13 @@ class Trainer:
                         tb.add_scalar("Loss/Train", avg_train_loss, epoch + 1) # type: ignore
                         tb.add_scalar("Loss/Train_Physics", avg_physics_loss, epoch + 1) # type: ignore
                         tb.add_scalar("Loss/Train_Trajectory", avg_trajectory_loss, epoch + 1) # type: ignore
-                        tb.add_scalar("Loss/Train_Kinetic", avg_kinetic_loss, epoch + 1) # type: ignore
                         tb.add_scalar("Loss/Val", avg_val_loss, epoch + 1)  # type: ignore
                         tb.add_scalar("Loss/Val_Physics", val_metrics["physics_loss"], epoch + 1) # type: ignore
                         tb.add_scalar("Loss/Val_Trajectory", val_metrics["trajectory_loss"], epoch + 1) # type: ignore
-                        tb.add_scalar("Loss/Val_Kinetic", val_metrics["kinetic_loss"], epoch + 1) # type: ignore
                     
                     print_interval = getattr(self.config, 'print_interval', 10)
                     if (epoch + 1) % print_interval == 0 or epoch == 0:
-                        print_beautiful_log(self.config, epoch + 1, avg_train_loss, avg_physics_loss, avg_trajectory_loss, avg_kinetic_loss,
+                        print_beautiful_log(self.config, epoch + 1, avg_train_loss, avg_physics_loss, avg_trajectory_loss,
                                                  val_metrics)
                     
                 if (epoch + 1) % getattr(self.config, 'test_interval', 50) == 0:
@@ -218,15 +222,17 @@ class Trainer:
                 if hasattr(self, 'run_dir') and self.run_dir:
                     plot_losses(self.run_dir)
                 
-    def _train_step(self, batch, total_train_loss, total_physics_loss, total_trajectory_loss, total_kinetic_loss, total_samples):
+    def _train_step(self, batch, total_train_loss, total_physics_loss, total_trajectory_loss, total_samples,
+                    epoch_segment_losses=None, segment_counts=None):
         """Single training step - shared between mixed and separate modes."""
-        t, initial_state, state, qdot = batch
+        t, initial_state, state, qdot, segment_idx = batch
         
         self.optimizer.zero_grad()
-        loss, loss_dict = compute_loss(
-            self.model, (t, initial_state, state, qdot),
-            loss_weights=self.loss_weights,
-            time_scale =self.config.time_scale, parameters_tensor=self.parameter_tensors
+        loss, loss_dict, segment_losses = compute_loss(
+            self.model, (t, initial_state, state, qdot, segment_idx),
+            loss_weights=self.loss_weights, residual_weights=self.residual_weights,
+            time_scale=self.config.time_scale, parameters_tensor=self.parameter_tensors,
+            num_segments=self.config.time_segments
         )
         
         self.accelerator.backward(loss)
@@ -241,10 +247,15 @@ class Trainer:
         total_train_loss += loss.item() * batch_size
         total_physics_loss += loss_dict["physics_loss"] * batch_size
         total_trajectory_loss += loss_dict["trajectory_loss"] * batch_size
-        total_kinetic_loss += loss_dict["kinetic_loss"] * batch_size
         total_samples += batch_size
         
-        return total_train_loss, total_physics_loss, total_trajectory_loss, total_kinetic_loss, total_samples
+        # Accumulate segment losses for temporal weight update (no loop needed - already averaged in compute_loss)
+        if segment_losses is not None and epoch_segment_losses is not None and segment_counts is not None:
+            with torch.no_grad():
+                epoch_segment_losses += segment_losses
+                segment_counts += 1  # Count batches per segment
+        
+        return total_train_loss, total_physics_loss, total_trajectory_loss, total_samples, epoch_segment_losses, segment_counts
     
     def _check_early_stopping(self, val_loss, epoch):
         """Check if early stopping criteria is met."""
@@ -283,11 +294,10 @@ class Trainer:
         total_loss = 0.0
         total_physics_loss = 0.0
         total_trajectory_loss = 0.0
-        total_kinetic_loss = 0.0
         total_samples = 0
         
         for batch in val_loader:
-            t, initial_state, state, qdot = batch
+            t, initial_state, state, qdot, segment_idx = batch
             t = t.view(-1, 1)
             
             # Detach and require grad for physics computation
@@ -296,10 +306,10 @@ class Trainer:
             # Enable gradients only for this batch computation
             with torch.enable_grad():
                 with self.accelerator.autocast():
-                    loss, loss_dict = compute_loss(
-                        unwrapped_model, (t, initial_state, state, qdot),
-                        loss_weights=self.loss_weights,
-                        time_scale =self.config.time_scale , parameters_tensor=self.parameter_tensors
+                    loss, loss_dict, _ = compute_loss(
+                        unwrapped_model, (t, initial_state, state, qdot, segment_idx),
+                        loss_weights=self.loss_weights, residual_weights=self.residual_weights,
+                        time_scale=self.config.time_scale, parameters_tensor=self.parameter_tensors
                     )
             
             # Extract loss values and immediately free the computation graph
@@ -307,7 +317,6 @@ class Trainer:
             total_loss += loss.item() * batch_size
             total_physics_loss += loss_dict["physics_loss"] * batch_size
             total_trajectory_loss += loss_dict["trajectory_loss"] * batch_size
-            total_kinetic_loss += loss_dict["kinetic_loss"] * batch_size
             total_samples += batch_size
             
         
@@ -318,25 +327,21 @@ class Trainer:
         total_loss = torch.tensor(total_loss, device=self.device)
         total_physics_loss = torch.tensor(total_physics_loss, device=self.device)
         total_trajectory_loss = torch.tensor(total_trajectory_loss, device=self.device)
-        total_kinetic_loss = torch.tensor(total_kinetic_loss, device=self.device)
         total_samples = torch.tensor(total_samples, device=self.device)
         
         total_loss = self.accelerator.gather(total_loss).sum().item()
         total_physics_loss = self.accelerator.gather(total_physics_loss).sum().item()
         total_trajectory_loss = self.accelerator.gather(total_trajectory_loss).sum().item()
-        total_kinetic_loss = self.accelerator.gather(total_kinetic_loss).sum().item()
         total_samples = self.accelerator.gather(total_samples).sum().item()
         
         avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
         avg_physics = total_physics_loss / total_samples if total_samples > 0 else 0.0
         avg_data = total_trajectory_loss / total_samples if total_samples > 0 else 0.0
-        avg_kinetic = total_kinetic_loss / total_samples if total_samples > 0 else 0.0
         
         return {
             "total_loss": avg_loss,
             "physics_loss": avg_physics,
             "trajectory_loss": avg_data,
-            "kinetic_loss": avg_kinetic
         }
 
     def evaluate_test_set(self):
@@ -378,7 +383,6 @@ class Trainer:
             print(f"{'Total Loss':<30} {test_metrics['total_loss']:<15.6f}")
             print(f"{'Physics Loss':<30} {test_metrics['physics_loss']:<15.6f}")
             print(f"{'Trajectory Loss':<30} {test_metrics['trajectory_loss']:<15.6f}")
-            print(f"{'Kinetic Loss':<30} {test_metrics['kinetic_loss']:<15.6f}")
             print("="*80 + "\n")
             
             # Save test results to file if run_dir is available
@@ -390,6 +394,4 @@ class Trainer:
                     f.write(f"Total Loss:    {test_metrics['total_loss']:.6f}\n")
                     f.write(f"Physics Loss:  {test_metrics['physics_loss']:.6f}\n")
                     f.write(f"Trajectory Loss:     {test_metrics['trajectory_loss']:.6f}\n")
-                    f.write(f"Kinetic Loss:     {test_metrics['kinetic_loss']:.6f}\n")
-                    f.write("="*80 + "\n")
                 print(f"Test results saved to: {test_results_file}")
