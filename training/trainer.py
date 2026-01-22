@@ -122,8 +122,21 @@ class Trainer:
                 
                 # w_i = exp(-epsilon * sum_{k=1}^{i-1} L_r^k)
                 with torch.no_grad():
-                    epoch_segment_losses = self.accelerator.gather(epoch_segment_losses).sum(dim=0)
-                    segment_counts = self.accelerator.gather(segment_counts).sum(dim=0)
+                    # Gather and ensure proper shape (num_processes, time_segments) -> (time_segments,)
+                    gathered_segment_losses = self.accelerator.gather(epoch_segment_losses)
+                    gathered_segment_counts = self.accelerator.gather(segment_counts)
+                    
+                    # Sum across processes if multi-GPU, otherwise just use the tensor
+                    if gathered_segment_losses.dim() > 1:
+                        epoch_segment_losses = gathered_segment_losses.sum(dim=0)
+                        segment_counts = gathered_segment_counts.sum(dim=0)
+                    else:
+                        epoch_segment_losses = gathered_segment_losses
+                        segment_counts = gathered_segment_counts
+                    
+                    # Ensure 1D shape
+                    epoch_segment_losses = epoch_segment_losses.view(-1)
+                    segment_counts = segment_counts.view(-1)
                     
                     avg_segment_losses = epoch_segment_losses / (segment_counts + 1e-8)
                     
