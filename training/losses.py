@@ -41,6 +41,8 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
         # Compute squared residuals: (N, 2) -> (N,)
         squared_res = torch.mean(physic_res**2, dim=1)  # Average over output dimensions
         
+        segment_idx = segment_idx.flatten()
+        
         # Use scatter_add for efficient parallel computation
         segment_losses = torch.zeros(num_segments, device=physic_res.device)
         segment_counts = torch.zeros(num_segments, device=physic_res.device)
