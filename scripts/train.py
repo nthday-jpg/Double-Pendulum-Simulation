@@ -99,7 +99,11 @@ def parse_args():
     parser.add_argument('--gradient_accumulation_steps', type=int, default=1,
                         help='Gradient accumulation steps')
     
-
+    # Time domain segmentation for temporal weight updates
+    parser.add_argument('--time_segments', type=int, default=10,
+                        help='Number of time segments to split each trajectory into')
+    parser.add_argument('--epsilon', type=float, default=0.1,
+                        help='Hyperparameter for exponential temporal weighting')   
 
     # Model loading
     parser.add_argument('--checkpoint_path', type=str, default=None,
@@ -203,6 +207,10 @@ def main():
         # Regularization
         l1_lambda=args.l1_lambda,
         l2_lambda=args.l2_lambda,
+
+        # Time domain segmentation for temporal weight updates
+        time_segments=args.time_segments,
+        epsilon=args.epsilon,
         
         # Physics / PINN
         physics_lambda=args.physics_lambda,
