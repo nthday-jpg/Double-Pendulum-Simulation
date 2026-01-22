@@ -18,8 +18,8 @@ def init_run(cfg: Config):
     csv_file = open(csv_path, "w", newline="")
     fieldnames = [
         "epoch", 
-        "train_loss", "train_physics", "train_trajectory", 
-        "val_loss", "val_physics", "val_trajectory",
+        "train_loss", "train_physics", "train_trajectory", "train_ic",
+        "val_loss", "val_physics", "val_trajectory", "val_ic",
         "lr"
     ]
     writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
