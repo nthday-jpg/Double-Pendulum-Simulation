@@ -93,7 +93,7 @@ class Trainer:
             print("="*60, flush=True)
             print(f"Starting training for {self.config.epochs} epochs...", flush=True)
             print(f"Device: {self.device}", flush=True)
-            print(f"Batch size: {self.config.batch_size}, Physics loss weight: {self.config.physics_lambda}, Trajectory loss weight: {self.config.data_lambda}", flush=True)
+            print(f"Batch size: {self.config.batch_size}, Physics loss weight: {self.config.physics_lambda}, Data loss weight: {self.config.data_lambda}, IC Loss weight: {self.config.ic_lambda}", flush=True)
             print(f"Temporal weighting: epsilon={self.config.epsilon}, segments={self.config.time_segments}", flush=True)
             print("="*60, flush=True)
         
