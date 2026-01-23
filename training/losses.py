@@ -9,7 +9,7 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
     segment_idx = segment_idx.view(-1)  # (N,) - ensure 1D
     initial_state = initial_state.detach()  # (N, 4)
 
-    # ========== FORWARD PASS (batch points) ==========
+    # FORWARD PASS (batch points)
     model_input = torch.cat([t, initial_state], dim=1)
     q_pred = model(model_input)  # (N, 2)
     
@@ -24,9 +24,8 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
     trajectory_res = trajectory_residual(q_pred, state)
     trajectory_loss = torch.mean(trajectory_res**2)
 
-    # ========== IC LOSS (SEPARATE FORWARD PASS at t=0) ==========
+    # INITIAL CONDITION LOSS
     # Evaluate IC for all points: forward pass at t=0 with their initial states
-    # This is fully vectorized and parallel-training friendly
     t_zero = torch.zeros_like(t, requires_grad=True)
     
     ic_input = torch.cat([t_zero, initial_state], dim=1)
@@ -34,13 +33,16 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
     
     # Compute derivatives at t=0
     qdot_ic_pred, _ = compute_derivatives(q_ic_pred, t_zero)
+
+    if time_scale is not None:
+        qdot_ic_pred = qdot_ic_pred / time_scale
     
     # IC loss: position + velocity at t=0
     ic_position_loss = torch.mean((q_ic_pred - initial_state[:, :2])**2)
     ic_velocity_loss = torch.mean((qdot_ic_pred - initial_state[:, 2:])**2)
     ic_loss = ic_position_loss + ic_velocity_loss
 
-    # ========== TOTAL LOSS ==========
+    # TOTAL LOSS
     total_loss = (loss_weights['physics_lambda'] * physics_loss + 
                   loss_weights['trajectory_lambda'] * trajectory_loss + 
                   loss_weights['ic_lambda'] * ic_loss)
