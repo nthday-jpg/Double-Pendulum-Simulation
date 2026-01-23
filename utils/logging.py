@@ -1,9 +1,10 @@
 # logging.py
 import os
 import csv
+import yaml
+from dataclasses import asdict
 import pandas as pd
 import matplotlib.pyplot as plt
-import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 import torch
 from utils.config import Config
@@ -12,6 +13,10 @@ def init_run(cfg: Config):
     """Initialize logging for a training run."""
     run_dir = os.path.join("runs", cfg.run_name)
     os.makedirs(run_dir, exist_ok=True)
+
+    config_path = os.path.join(run_dir, "config.yaml")
+    with open(config_path, "w") as f:
+        yaml.dump(asdict(cfg), f, default_flow_style=False, sort_keys=False)
     
     # CSV logging
     csv_path = os.path.join(run_dir, "metrics.csv")
