@@ -50,7 +50,7 @@ def compute_derivatives(q, t):
             
     return qdot, qdd
 
-def trajectory_residual(q_pred, q_true):
+def data_residual(q_pred, q_true):
     """
         Enforces the trajectory matching: q_pred = q_true
     """

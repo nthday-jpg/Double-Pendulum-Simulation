@@ -22,7 +22,7 @@ class Trainer:
 
         self.loss_weights = {
             'physics_lambda': config.physics_lambda,
-            'trajectory_lambda': config.trajectory_lambda,
+            'data_lambda': config.data_lambda,
             'ic_lambda': config.ic_lambda,
         }
         
@@ -93,7 +93,7 @@ class Trainer:
             print("="*60, flush=True)
             print(f"Starting training for {self.config.epochs} epochs...", flush=True)
             print(f"Device: {self.device}", flush=True)
-            print(f"Batch size: {self.config.batch_size}, Physics loss weight: {self.config.physics_lambda}, Trajectory loss weight: {self.config.trajectory_lambda}", flush=True)
+            print(f"Batch size: {self.config.batch_size}, Physics loss weight: {self.config.physics_lambda}, Trajectory loss weight: {self.config.data_lambda}", flush=True)
             print(f"Temporal weighting: epsilon={self.config.epsilon}, segments={self.config.time_segments}", flush=True)
             print("="*60, flush=True)
         
@@ -102,7 +102,7 @@ class Trainer:
                 self.model.train()
                 total_train_loss = 0.0
                 total_physics_loss = 0.0
-                total_trajectory_loss = 0.0
+                total_data_loss = 0.0
                 total_ic_loss = 0.0
                 total_samples = 0
                 
@@ -112,15 +112,15 @@ class Trainer:
                 
                 # Process all data batches
                 for data_batch in self.data_loader:
-                    total_train_loss, total_physics_loss, total_trajectory_loss, total_ic_loss, total_samples, epoch_segment_losses, segment_counts = self._train_step(
-                        data_batch, total_train_loss, total_physics_loss, total_trajectory_loss, total_ic_loss, total_samples,
+                    total_train_loss, total_physics_loss, total_data_loss, total_ic_loss, total_samples, epoch_segment_losses, segment_counts = self._train_step(
+                        data_batch, total_train_loss, total_physics_loss, total_data_loss, total_ic_loss, total_samples,
                         epoch_segment_losses, segment_counts
                     )
                 
                 # Compute epoch averages
                 avg_train_loss = total_train_loss / total_samples
                 avg_physics_loss = total_physics_loss / total_samples
-                avg_trajectory_loss = total_trajectory_loss / total_samples
+                avg_data_loss = total_data_loss / total_samples
                 avg_ic_loss = total_ic_loss / total_samples
                 
                 # w_i = exp(-epsilon * sum_{k=1}^{i-1} L_r^k)
@@ -161,11 +161,11 @@ class Trainer:
                             "epoch": epoch + 1,
                             "train_loss": avg_train_loss,
                             "train_physics": avg_physics_loss,
-                            "train_trajectory": avg_trajectory_loss,
+                            "train_trajectory": avg_data_loss,
                             "train_ic": avg_ic_loss,
                             "val_loss": avg_val_loss,
                             "val_physics": val_metrics["physics_loss"],
-                            "val_trajectory": val_metrics["trajectory_loss"],
+                            "val_trajectory": val_metrics["data_loss"],
                             "val_ic": val_metrics["ic_loss"],
                         }
                         
@@ -174,16 +174,16 @@ class Trainer:
                         
                         tb.add_scalar("Loss/Train", avg_train_loss, epoch + 1) # type: ignore
                         tb.add_scalar("Loss/Train_Physics", avg_physics_loss, epoch + 1) # type: ignore
-                        tb.add_scalar("Loss/Train_Trajectory", avg_trajectory_loss, epoch + 1) # type: ignore
+                        tb.add_scalar("Loss/Train_Trajectory", avg_data_loss, epoch + 1) # type: ignore
                         tb.add_scalar("Loss/Train_IC", avg_ic_loss, epoch + 1) # type: ignore
                         tb.add_scalar("Loss/Val", avg_val_loss, epoch + 1)  # type: ignore
                         tb.add_scalar("Loss/Val_Physics", val_metrics["physics_loss"], epoch + 1) # type: ignore
-                        tb.add_scalar("Loss/Val_Trajectory", val_metrics["trajectory_loss"], epoch + 1) # type: ignore
+                        tb.add_scalar("Loss/Val_Trajectory", val_metrics["data_loss"], epoch + 1) # type: ignore
                         tb.add_scalar("Loss/Val_IC", val_metrics["ic_loss"], epoch + 1) # type: ignore
                     
                     print_interval = getattr(self.config, 'print_interval', 10)
                     if (epoch + 1) % print_interval == 0 or epoch == 0:
-                        print_beautiful_log(self.config, epoch + 1, avg_train_loss, avg_physics_loss, avg_trajectory_loss, avg_ic_loss,
+                        print_beautiful_log(self.config, epoch + 1, avg_train_loss, avg_physics_loss, avg_data_loss, avg_ic_loss,
                                                  val_metrics)
                     
                 if (epoch + 1) % getattr(self.config, 'test_interval', 50) == 0:
@@ -243,14 +243,14 @@ class Trainer:
                 if hasattr(self, 'run_dir') and self.run_dir:
                     plot_losses(self.run_dir)
                 
-    def _train_step(self, batch, total_train_loss, total_physics_loss, total_trajectory_loss, total_ic_loss, total_samples,
+    def _train_step(self, batch, total_train_loss, total_physics_loss, total_data_loss, total_ic_loss, total_samples,
                     epoch_segment_losses=None, segment_counts=None):
         """Single training step - shared between mixed and separate modes."""
-        t, initial_state, state, qdot, segment_idx = batch
+        t, initial_state, q, qdot, segment_idx = batch
         
         self.optimizer.zero_grad()
         loss, loss_dict, segment_losses = compute_loss(
-            self.model, (t, initial_state, state, qdot, segment_idx),
+            self.model, (t, initial_state, q, qdot, segment_idx),
             loss_weights=self.loss_weights, residual_weights=self.residual_weights,
             time_scale=self.config.time_scale, parameters_tensor=self.parameter_tensors,
             num_segments=self.config.time_segments
@@ -267,7 +267,7 @@ class Trainer:
         batch_size = t.size(0)
         total_train_loss += loss.item() * batch_size
         total_physics_loss += loss_dict["physics_loss"] * batch_size
-        total_trajectory_loss += loss_dict["trajectory_loss"] * batch_size
+        total_data_loss += loss_dict["data_loss"] * batch_size
         total_ic_loss += loss_dict["ic_loss"] * batch_size
         total_samples += batch_size
         
@@ -280,7 +280,7 @@ class Trainer:
                 epoch_segment_losses += segment_losses
                 segment_counts += 1  # Count batches per segment
         
-        return total_train_loss, total_physics_loss, total_trajectory_loss, total_ic_loss, total_samples, epoch_segment_losses, segment_counts
+        return total_train_loss, total_physics_loss, total_data_loss, total_ic_loss, total_samples, epoch_segment_losses, segment_counts
     
     def _check_early_stopping(self, val_loss, epoch):
         """Check if early stopping criteria is met."""
@@ -318,12 +318,12 @@ class Trainer:
         
         total_loss = 0.0
         total_physics_loss = 0.0
-        total_trajectory_loss = 0.0
+        total_data_loss = 0.0
         total_ic_loss = 0.0
         total_samples = 0
         
         for batch in val_loader:
-            t, initial_state, state, qdot, segment_idx = batch
+            t, initial_state, q, qdot, segment_idx = batch
             t = t.view(-1, 1)
             
             # Detach and require grad for physics computation
@@ -333,7 +333,7 @@ class Trainer:
             with torch.enable_grad():
                 with self.accelerator.autocast():
                     loss, loss_dict, _ = compute_loss(
-                        unwrapped_model, (t, initial_state, state, qdot, segment_idx),
+                        unwrapped_model, (t, initial_state, q, qdot, segment_idx),
                         loss_weights=self.loss_weights, residual_weights=self.residual_weights,
                         time_scale=self.config.time_scale, parameters_tensor=self.parameter_tensors
                     )
@@ -342,7 +342,7 @@ class Trainer:
             batch_size = t.size(0)
             total_loss += loss.item() * batch_size
             total_physics_loss += loss_dict["physics_loss"] * batch_size
-            total_trajectory_loss += loss_dict["trajectory_loss"] * batch_size
+            total_data_loss += loss_dict["data_loss"] * batch_size
             total_ic_loss += loss_dict["ic_loss"] * batch_size
             total_samples += batch_size
             
@@ -353,25 +353,25 @@ class Trainer:
         # Gather losses from all processes
         total_loss = torch.tensor(total_loss, device=self.device)
         total_physics_loss = torch.tensor(total_physics_loss, device=self.device)
-        total_trajectory_loss = torch.tensor(total_trajectory_loss, device=self.device)
+        total_data_loss = torch.tensor(total_data_loss, device=self.device)
         total_ic_loss = torch.tensor(total_ic_loss, device=self.device)
         total_samples = torch.tensor(total_samples, device=self.device)
         
         total_loss = self.accelerator.gather(total_loss).sum().item()
         total_physics_loss = self.accelerator.gather(total_physics_loss).sum().item()
-        total_trajectory_loss = self.accelerator.gather(total_trajectory_loss).sum().item()
+        total_data_loss = self.accelerator.gather(total_data_loss).sum().item()
         total_ic_loss = self.accelerator.gather(total_ic_loss).sum().item()
         total_samples = self.accelerator.gather(total_samples).sum().item()
         
         avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
         avg_physics = total_physics_loss / total_samples if total_samples > 0 else 0.0
-        avg_data = total_trajectory_loss / total_samples if total_samples > 0 else 0.0
+        avg_data = total_data_loss / total_samples if total_samples > 0 else 0.0
         avg_ic = total_ic_loss / total_samples if total_samples > 0 else 0.0
         
         return {
             "total_loss": avg_loss,
             "physics_loss": avg_physics,
-            "trajectory_loss": avg_data,
+            "data_loss": avg_data,
             "ic_loss": avg_ic,
         }
 
@@ -413,7 +413,7 @@ class Trainer:
             print("-"*80)
             print(f"{'Total Loss':<30} {test_metrics['total_loss']:<15.6f}")
             print(f"{'Physics Loss':<30} {test_metrics['physics_loss']:<15.6f}")
-            print(f"{'Trajectory Loss':<30} {test_metrics['trajectory_loss']:<15.6f}")
+            print(f"{'Trajectory Loss':<30} {test_metrics['data_loss']:<15.6f}")
             print(f"{'IC Loss':<30} {test_metrics['ic_loss']:<15.6f}")
             print("="*80 + "\n")
             
@@ -425,6 +425,6 @@ class Trainer:
                     f.write("="*80 + "\n")
                     f.write(f"Total Loss:    {test_metrics['total_loss']:.6f}\n")
                     f.write(f"Physics Loss:  {test_metrics['physics_loss']:.6f}\n")
-                    f.write(f"Trajectory Loss:     {test_metrics['trajectory_loss']:.6f}\n")
+                    f.write(f"Trajectory Loss:     {test_metrics['data_loss']:.6f}\n")
                     f.write(f"IC Loss:       {test_metrics['ic_loss']:.6f}\n")
                 print(f"Test results saved to: {test_results_file}")

@@ -45,7 +45,7 @@ def parse_args():
     
     # Data
     parser.add_argument('--data_dir', type=str, default='data/raw',
-                        help='Directory containing trajectory files (trajectory_*.npz) and parameters (parameters_*.json)')
+                        help='Directory containing trajectory files (data_*.npz) and parameters (parameters_*.json)')
     parser.add_argument('--val_split', type=float, default=0.2,
                         help='Validation split ratio')
     parser.add_argument('--test_split', type=float, default=0.1,
@@ -118,8 +118,8 @@ def parse_args():
     # Physics / PINN
     parser.add_argument('--physics_lambda', type=float, default=1.0,
                         help='Weight for physics loss term')
-    parser.add_argument('--trajectory_lambda', type=float, default=1.0,
-                        help='Weight for trajectory loss term')
+    parser.add_argument('--data_lambda', type=float, default=1.0,
+                        help='Weight for data loss term')
     parser.add_argument('--ic_lambda', type=float, default=1.0,
                         help='Weight for initial condition loss term')
     parser.add_argument('--residual_type', type=str, default='lagrangian',
@@ -204,7 +204,7 @@ def main():
         
         # Physics / PINN
         physics_lambda=args.physics_lambda,
-        trajectory_lambda=args.trajectory_lambda,
+        data_lambda=args.data_lambda,
         ic_lambda=args.ic_lambda,
         residual_type=args.residual_type,
         

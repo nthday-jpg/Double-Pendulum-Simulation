@@ -111,7 +111,7 @@ def print_beautiful_log(config, epoch, train_loss, train_physics, train_trajecto
         print(f"{'Train':<15} {train_loss:<15.6f} {train_physics:<15.6f} {train_trajectory:<15.6f} {train_ic:<15.6f}")
         
         # Validation
-        print(f"{'Validation':<15} {val_metrics['total_loss']:<15.6f} {val_metrics['physics_loss']:<15.6f} {val_metrics['trajectory_loss']:<15.6f} {val_metrics['ic_loss']:<15.6f}")
+        print(f"{'Validation':<15} {val_metrics['total_loss']:<15.6f} {val_metrics['physics_loss']:<15.6f} {val_metrics['data_loss']:<15.6f} {val_metrics['ic_loss']:<15.6f}")
         
         print("="*80 + "\n")
     

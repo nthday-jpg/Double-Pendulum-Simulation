@@ -97,13 +97,13 @@ class PendulumDataset(Dataset):
         else:
             t = t_raw
         initial_state = torch.tensor(traj['initial_state'], dtype=torch.float32)
-        state = torch.tensor(np.concatenate([traj['q'][local_idx]]), dtype=torch.float32)
+        q = torch.tensor(np.concatenate([traj['q'][local_idx]]), dtype=torch.float32)
         qdot = torch.tensor(np.concatenate([traj['qdot'][local_idx]]), dtype=torch.float32)
         
         segment_idx = torch.bucketize(t_raw, self.time_buckets)
         segment_idx = torch.clamp(segment_idx, 1, self.time_segments) - 1  # ensure in [0, time_segments-1]
 
-        return t, initial_state, state, qdot, segment_idx
+        return t, initial_state, q, qdot, segment_idx
 
 def get_dataloader(data_dir, config,
                    num_workers=None, shuffle=True):

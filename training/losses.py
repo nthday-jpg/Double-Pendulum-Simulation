@@ -1,8 +1,8 @@
 import torch
-from physics.physics_loss import physics_residual, compute_derivatives, trajectory_residual
+from physics.physics_loss import physics_residual, compute_derivatives, data_residual
 
 def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights, time_scale=None, num_segments=None):
-    t, initial_state, state, qdot, segment_idx = batch
+    t, initial_state, q, qdot, segment_idx = batch
     
     # Ensure proper tensor shapes
     t = t.detach().view(-1, 1).requires_grad_(True)  # (N, 1)
@@ -21,8 +21,8 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
     physic_res = physics_residual(q_pred, qdot_pred, qdd_pred, parameters_tensor, time_scale=time_scale)
     physics_loss = torch.mean(physic_res**2 * residual_weights[segment_idx].unsqueeze(-1)) # (N, 2) * (N, 1) broadcast res -> (N, 2)
     
-    trajectory_res = trajectory_residual(q_pred, state)
-    trajectory_loss = torch.mean(trajectory_res**2)
+    data_res = data_residual(q_pred, q)
+    data_loss = torch.mean(data_res**2)
 
     # INITIAL CONDITION LOSS
     # Evaluate IC for all points: forward pass at t=0 with their initial states
@@ -44,12 +44,12 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
 
     # TOTAL LOSS
     total_loss = (loss_weights['physics_lambda'] * physics_loss + 
-                  loss_weights['trajectory_lambda'] * trajectory_loss + 
+                  loss_weights['data_lambda'] * data_loss + 
                   loss_weights['ic_lambda'] * ic_loss)
 
     loss_dict = {
         "physics_loss": physics_loss.item(),
-        "trajectory_loss": trajectory_loss.item(),
+        "data_loss": data_loss.item(),
         "ic_loss": ic_loss.item(),
     }
 

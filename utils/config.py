@@ -57,7 +57,7 @@ class Config:
 
     # physics / PINN
     physics_lambda: float = 1.0  # Weight for physics loss term
-    trajectory_lambda: float = 1.0  # Weight for trajectory loss term
+    data_lambda: float = 1.0  # Weight for trajectory loss term
     ic_lambda: float = 1.0  # Weight for initial condition loss term
     residual_type: str = "lagrangian"  # eom | hamiltonian | lagrangian
     
