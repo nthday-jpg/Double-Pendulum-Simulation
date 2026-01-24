@@ -122,7 +122,7 @@ class Trainer:
                 avg_physics_loss = total_physics_loss / total_samples
                 avg_data_loss = total_data_loss / total_samples
                 avg_ic_loss = total_ic_loss / total_samples
-                
+                avg_segment_losses = torch.zeros((self.config.time_segments,), dtype=torch.float32, device=self.device)
                 # w_i = exp(-epsilon * sum_{k=1}^{i-1} L_r^k)
                 with torch.no_grad():
                     # Ensure proper shape before gathering: (time_segments,)
@@ -168,6 +168,7 @@ class Trainer:
                             "val_physics": val_metrics["physics_loss"],
                             "val_trajectory": val_metrics["data_loss"],
                             "val_ic": val_metrics["ic_loss"],
+                            "average_segment_losses": avg_segment_losses.cpu().numpy().tolist(),
                         }
                         
                         writer.writerow(log_dict) # type: ignore
@@ -181,11 +182,13 @@ class Trainer:
                         tb.add_scalar("Loss/Val_Physics", val_metrics["physics_loss"], epoch + 1) # type: ignore
                         tb.add_scalar("Loss/Val_Trajectory", val_metrics["data_loss"], epoch + 1) # type: ignore
                         tb.add_scalar("Loss/Val_IC", val_metrics["ic_loss"], epoch + 1) # type: ignore
+                        for seg_idx in range(0, self.config.time_segments):
+                            tb.add_scalar(f"Avg_Segment_Loss/Segment_{seg_idx}", avg_segment_losses[seg_idx].item(), epoch + 1) # type: ignore
                     
                     print_interval = getattr(self.config, 'print_interval', 10)
                     if (epoch + 1) % print_interval == 0 or epoch == 0:
                         print_beautiful_log(self.config, epoch + 1, avg_train_loss, avg_physics_loss, avg_data_loss, avg_ic_loss,
-                                                 val_metrics)
+                                                 val_metrics, avg_segment_losses, self.residual_weights)
                     
                 if (epoch + 1) % getattr(self.config, 'test_interval', 50) == 0:
                     self.evaluate_test_set()

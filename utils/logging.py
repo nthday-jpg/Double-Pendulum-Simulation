@@ -24,7 +24,8 @@ def init_run(cfg: Config):
     fieldnames = [
         "epoch", 
         "train_loss", "train_physics", "train_trajectory", "train_ic",
-        "val_loss", "val_physics", "val_trajectory", "val_ic",
+        "val_loss", "val_physics", "val_trajectory", "val_ic", 
+        "average_segment_losses",
         "lr"
     ]
     writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
@@ -97,7 +98,7 @@ def plot_losses(run_dir):
     print(f"Loss plot saved to: {plot_path}")
     plt.close()
 
-def print_beautiful_log(config, epoch, train_loss, train_physics, train_trajectory, train_ic, val_metrics):
+def print_beautiful_log(config, epoch, train_loss, train_physics, train_trajectory, train_ic, val_metrics, avg_segment_losses, residual_weights):
         """Print beautifully formatted training logs."""
         print("\n" + "="*80)
         print(f"{'Epoch':<15} {epoch}/{config.epochs}")
@@ -114,4 +115,7 @@ def print_beautiful_log(config, epoch, train_loss, train_physics, train_trajecto
         print(f"{'Validation':<15} {val_metrics['total_loss']:<15.6f} {val_metrics['physics_loss']:<15.6f} {val_metrics['data_loss']:<15.6f} {val_metrics['ic_loss']:<15.6f}")
         
         print("="*80 + "\n")
-    
+        print("Average Segment Losses:")
+        for seg_idx, seg_loss in enumerate(avg_segment_losses):
+            print(f"  Segment {seg_idx}: {seg_loss:.6f} | Residual Weight: {residual_weights[seg_idx]:.4f}")
+        print("="*80 + "\n")
