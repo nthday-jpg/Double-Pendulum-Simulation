@@ -74,7 +74,7 @@ def parse_args():
                         help='Input dimension')
     parser.add_argument('--output_dim', type=int, default=2,
                         help='Output dimension')
-    parser.add_argument('--use_encoder', action='store_true',
+    parser.add_argument('--use_encoder', type=bool, default=False,
                         help='Use random Fourier features encoder')
     parser.add_argument('--encoder_sigma', type=float, default=1.0,
                         help='Standard deviation for RFF encoder')
