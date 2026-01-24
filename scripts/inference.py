@@ -309,11 +309,8 @@ def run_inference(checkpoint_path, initial_state=None, t_span=(0, 10), num_point
     # Simulate with PINN using proper normalization
     if cfg.use_encoder:
         import rff
-        encoder = rff.layers.GaussianEncoding(
-            input_dim=cfg.encoder_input_dim,
-            encoded_size=cfg.encoder_encoded_size,
-            sigma=cfg.encoder_sigma
-        ).to(device)
+        encoder = rff.layers.GaussianEncoding(cfg.encoder_sigma, cfg.encoder_input_dim, cfg.encoder_encoded_size)
+        encoder = encoder.to(device)
     print("\nSimulating with PINN...")
     t_pred, q_pred, qdot_pred = simulate_with_pinn(
         model, initial_state, t_span, num_points,
