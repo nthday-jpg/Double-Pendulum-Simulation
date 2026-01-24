@@ -31,8 +31,12 @@ class Config:
     final_activation: str | None = None  # None | tanh | sigmoid
     
     #input/output dimensions
-    input_dim: int | None = None
-    output_dim: int | None = None
+    input_dim: int = 5  # [t, θ1, θ2, ω1, ω2], if use encoder, input_dim includes encoded size
+    output_dim: int = 4  # [θ̇1, θ̇2, ω̇1, ω̇2]
+    use_encoder: bool = False # whether to use random Fourier features encoder
+    encoder_sigma: float = 1.0 # standard deviation for RFF
+    encoder_input_dim: int = 1 # input dimension for encoder (time dimension)
+    encoder_encoded_size: int = 10 # encoded size for RFF
 
     # training
     lr: float = 1e-3

@@ -3,6 +3,7 @@ import os
 import argparse
 import warnings
 import torch
+import rff
 from datetime import datetime  
 
 # Suppress warnings
@@ -73,6 +74,15 @@ def parse_args():
                         help='Input dimension')
     parser.add_argument('--output_dim', type=int, default=2,
                         help='Output dimension')
+    parser.add_argument('--use_encoder', action='store_true',
+                        help='Use random Fourier features encoder')
+    parser.add_argument('--encoder_sigma', type=float, default=1.0,
+                        help='Standard deviation for RFF encoder')
+    parser.add_argument('--encoder_input_dim', type=int, default=1,
+                        help='Input dimension for RFF encoder (time dimension)')
+    parser.add_argument('--encoder_encoded_size', type=int, default=10,
+                        help='Encoded size for RFF encoder')
+    
     
     # Training
     parser.add_argument('--lr', type=float, default=1e-3,
@@ -176,6 +186,10 @@ def main():
         final_activation=args.final_activation,
         input_dim=args.input_dim,
         output_dim=args.output_dim,
+        use_encoder=args.use_encoder,
+        encoder_sigma=args.encoder_sigma,
+        encoder_input_dim=args.encoder_input_dim,
+        encoder_encoded_size=args.encoder_encoded_size,
         
         # Training
         lr=args.lr,
@@ -247,6 +261,10 @@ def main():
             factor=0.5,
             patience=cfg.scheduler_patience
         )
+    # Initialize encoder if specified
+    encoder = None
+    if cfg.use_encoder:
+        encoder = rff.layers.GaussianEncoding(cfg.encoder_sigma, cfg.encoder_input_dim, cfg.encoder_encoded_size)
 
     # Get data loaders
     train_loader, val_loader, test_loader, parameters_list = get_dataloader(
@@ -263,7 +281,8 @@ def main():
         test_loader=test_loader,
         optimizer=optimizer,
         scheduler=scheduler,
-        parameters_list=parameters_list
+        parameters_list=parameters_list,
+        encoder=encoder
     )
     
     # Train the model

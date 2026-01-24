@@ -1,16 +1,18 @@
 import torch
 from physics.physics_loss import physics_residual, compute_derivatives, data_residual
 
-def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights, time_scale=None, num_segments=None):
+def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights, time_scale=None, num_segments=None, encoder=None):
     t, initial_state, q, qdot, segment_idx = batch
+
     
     # Ensure proper tensor shapes
     t = t.detach().view(-1, 1).requires_grad_(True)  # (N, 1)
     segment_idx = segment_idx.view(-1)  # (N,) - ensure 1D
     initial_state = initial_state.detach()  # (N, 4)
 
+    tp = encoder(t) if encoder is not None else t
     # FORWARD PASS (batch points)
-    model_input = torch.cat([t, initial_state], dim=1)
+    model_input = torch.cat([tp, initial_state], dim=1)
     q_pred = model(model_input)  # (N, 2)
     
     if q_pred.grad_fn is None:

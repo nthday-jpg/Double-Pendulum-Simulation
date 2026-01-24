@@ -11,7 +11,7 @@ from utils.logging import *
 class Trainer:
     def __init__(self, model: PINN, config: Config,
                  data_loader, val_loader, test_loader, parameters_list,
-                 optimizer, scheduler=None):
+                 optimizer, scheduler=None, encoder=None):
         
         self.accelerator = Accelerator(
             mixed_precision='fp16' if hasattr(config, 'mixed_precision') and config.mixed_precision else 'no',
@@ -27,8 +27,8 @@ class Trainer:
         }
         
         # Prepare model, optimizer, and dataloaders
-        self.model, self.optimizer, self.data_loader, self.val_loader, self.test_loader = self.accelerator.prepare(
-            model, optimizer, data_loader, val_loader, test_loader
+        self.model, self.optimizer, self.data_loader, self.val_loader, self.test_loader, self.encoder = self.accelerator.prepare(
+            model, optimizer, data_loader, val_loader, test_loader, encoder
         )
         
         self.scheduler = scheduler
@@ -257,7 +257,7 @@ class Trainer:
             self.model, (t, initial_state, q, qdot, segment_idx),
             loss_weights=self.loss_weights, residual_weights=self.residual_weights,
             time_scale=self.config.time_scale, parameters_tensor=self.parameter_tensors,
-            num_segments=self.config.time_segments
+            num_segments=self.config.time_segments, encoder=self.encoder
         )
         
         self.accelerator.backward(loss)
@@ -339,7 +339,8 @@ class Trainer:
                     loss, loss_dict, _ = compute_loss(
                         unwrapped_model, (t, initial_state, q, qdot, segment_idx),
                         loss_weights=self.loss_weights, residual_weights=self.residual_weights,
-                        time_scale=self.config.time_scale, parameters_tensor=self.parameter_tensors
+                        time_scale=self.config.time_scale, parameters_tensor=self.parameter_tensors, 
+                        encoder=self.encoder
                     )
             
             # Extract loss values and immediately free the computation graph

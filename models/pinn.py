@@ -4,13 +4,13 @@ import torch.nn as nn
 from utils.config import Config
 
 class PINN(nn.Module):
-    def __init__(self, cfg):
+    def __init__(self, cfg: Config):
         super().__init__()
         self.cfg = cfg
         
         # Store architecture info
-        self.input_dim = cfg.input_dim or 5  # [t, θ1, θ2, ω1, ω2]
-        self.output_dim = cfg.output_dim or 4  # [θ̇1, θ̇2, ω̇1, ω̇2]
+        self.input_dim = cfg.input_dim  # [t, θ1, θ2, ω1, ω2]
+        self.output_dim = cfg.output_dim  # [θ̇1, θ̇2, ω̇1, ω̇2]
         
         # Build network
         layers = []
