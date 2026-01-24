@@ -148,6 +148,7 @@ class Trainer:
                         # Update weights: w_0 = 1, w_i = exp(-epsilon * sum_{k=0}^{i-1} L_k)
                         self.residual_weights[0] = 1.0  
                         self.residual_weights[1:] = torch.exp(-self.config.epsilon * cumulative_losses[:-1])
+                        self.residual_weights = torch.clamp(self.residual_weights, min=0.3, max=1.0)
 
                 # Validation
                 val_metrics = self.evaluate(self.val_loader, prefix="val")
