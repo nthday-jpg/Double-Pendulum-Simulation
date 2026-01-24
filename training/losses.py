@@ -12,7 +12,7 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
 
     tp = encoder(t) if encoder is not None else t
     # FORWARD PASS (batch points)
-    model_input = torch.cat([tp, initial_state], dim=1)
+    model_input = torch.cat([t, tp, initial_state], dim=1)
     q_pred = model(model_input)  # (N, 2)
     
     if q_pred.grad_fn is None:
