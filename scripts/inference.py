@@ -309,7 +309,7 @@ def run_inference(checkpoint_path, initial_state=None, t_span=(0, 10), num_point
     # Simulate with PINN using proper normalization
     if cfg.use_encoder:
         import rff
-        encoder = rff.RandomFourierFeatures(
+        encoder = rff.GaussianEncoding(
             input_dim=cfg.encoder_input_dim,
             encoded_size=cfg.encoder_encoded_size,
             sigma=cfg.encoder_sigma
