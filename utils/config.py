@@ -35,7 +35,7 @@ class Config:
     output_dim: int = 4  # [θ̇1, θ̇2, ω̇1, ω̇2]
     use_encoder: bool = False # whether to use random Fourier features encoder
     encoder_sigma: float = 1.0 # standard deviation for RFF
-    encoder_input_dim: int = 1 # input dimension for encoder (time dimension)
+    encoder_input_dim: int = 1 # input dimension for RFF (time dimension)
     encoder_encoded_size: int = 10 # encoded size for RFF
 
     # training

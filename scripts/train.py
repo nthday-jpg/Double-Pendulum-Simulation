@@ -78,8 +78,6 @@ def parse_args():
                         help='Use random Fourier features encoder')
     parser.add_argument('--encoder_sigma', type=float, default=1.0,
                         help='Standard deviation for RFF encoder')
-    parser.add_argument('--encoder_input_dim', type=int, default=1,
-                        help='Input dimension for RFF encoder (time dimension)')
     parser.add_argument('--encoder_encoded_size', type=int, default=10,
                         help='Encoded size for RFF encoder')
     
@@ -188,7 +186,6 @@ def main():
         output_dim=args.output_dim,
         use_encoder=args.use_encoder,
         encoder_sigma=args.encoder_sigma,
-        encoder_input_dim=args.encoder_input_dim,
         encoder_encoded_size=args.encoder_encoded_size,
         
         # Training
