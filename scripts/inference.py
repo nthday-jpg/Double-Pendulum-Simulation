@@ -36,6 +36,7 @@ def load_model(checkpoint_path, device='cpu'):
 
 
 def simulate_with_pinn(model, initial_state, t_span, num_points, 
+                        encoder=None,
                        normalize_time=True,
                        time_scale=1.0, 
                        device='cpu'):
@@ -51,6 +52,7 @@ def simulate_with_pinn(model, initial_state, t_span, num_points,
         normalize_time: Whether time was normalized during training
         time_scale: Max time from training dataset (for normalization)
         device: Device to run on
+        encoder: Optional encoder for input features
         
     Returns:
         t: Time array (num_points,) in PHYSICAL units
@@ -77,7 +79,11 @@ def simulate_with_pinn(model, initial_state, t_span, num_points,
     
     t_tensor.requires_grad_(True)
     # Concatenate time and initial state: [t, theta1_0, theta2_0, omega1_0, omega2_0]
-    x = torch.cat([t_tensor, initial_state_batch], dim=1)
+    if encoder is not None:
+        tp = encoder(t_tensor)
+        x = torch.cat([t_tensor, tp, initial_state_batch], dim=1)
+    else:
+        x = torch.cat([t_tensor, initial_state_batch], dim=1)
     
     with torch.enable_grad():
         q = model(x)
@@ -299,14 +305,21 @@ def run_inference(checkpoint_path, initial_state=None, t_span=(0, 10), num_point
     print(f"\nInitial state: theta1={initial_state[0]:.3f}, theta2={initial_state[1]:.3f}, "
           f"omega1={initial_state[2]:.3f}, omega2={initial_state[3]:.3f}")
     print(f"Time span: {t_span}, Points: {num_points}")
-    
+
     # Simulate with PINN using proper normalization
+    if cfg.use_encoder:
+        import rff
+        encoder = rff.RandomFourierFeatures(
+            input_dim=cfg.encoder_input_dim,
+            encoded_size=cfg.encoder_encoded_size,
+            sigma=cfg.encoder_sigma
+        ).to(device)
     print("\nSimulating with PINN...")
     t_pred, q_pred, qdot_pred = simulate_with_pinn(
         model, initial_state, t_span, num_points,
         normalize_time=norm_params['normalize_time'],
         time_scale=norm_params['time_scale'],
-        device=device
+        device=device, encoder=encoder if cfg.use_encoder else None
     )
     
     # Save PINN predictions

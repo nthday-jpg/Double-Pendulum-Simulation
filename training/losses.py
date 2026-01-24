@@ -10,9 +10,11 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
     segment_idx = segment_idx.view(-1)  # (N,) - ensure 1D
     initial_state = initial_state.detach()  # (N, 4)
 
-    tp = encoder(t) if encoder is not None else t
-    # FORWARD PASS (batch points)
-    model_input = torch.cat([t, tp, initial_state], dim=1)
+    if encoder is not None:
+        tp = encoder(t)  # (N, encoded_size)
+        model_input = torch.cat([t, tp, initial_state], dim=1)  # (N, encoded_size + 4)
+    else:
+        model_input = torch.cat([t, initial_state], dim=1)
     q_pred = model(model_input)  # (N, 2)
     
     if q_pred.grad_fn is None:
@@ -30,7 +32,11 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
     # Evaluate IC for all points: forward pass at t=0 with their initial states
     t_zero = torch.zeros_like(t, requires_grad=True)
     
-    ic_input = torch.cat([t_zero, initial_state], dim=1)
+    if encoder is not None:
+        tp_zero = encoder(t_zero)
+        ic_input = torch.cat([t_zero, tp_zero, initial_state], dim=1)
+    else:
+        ic_input = torch.cat([t_zero, initial_state], dim=1)
     q_ic_pred = model(ic_input)  # (N, 2)
     
     # Compute derivatives at t=0
