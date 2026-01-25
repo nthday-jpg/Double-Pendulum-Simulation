@@ -34,7 +34,7 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
     
     if encoder is not None:
         tp_zero = encoder(t_zero)
-        ic_input = torch.cat([t_zero, tp_zero, initial_state], dim=1)
+        ic_input = torch.cat([tp_zero, initial_state], dim=1)
     else:
         ic_input = torch.cat([t_zero, initial_state], dim=1)
     q_ic_pred = model(ic_input)  # (N, 2)
