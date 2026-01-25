@@ -12,7 +12,7 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
 
     if encoder is not None:
         tp = encoder(t)  # (N, encoded_size)
-        model_input = torch.cat([t, tp, initial_state], dim=1)  # (N, encoded_size + 4)
+        model_input = torch.cat([tp, initial_state], dim=1)  # (N, encoded_size + 4)
     else:
         model_input = torch.cat([t, initial_state], dim=1)
     q_pred = model(model_input)  # (N, 2)

@@ -81,7 +81,7 @@ def simulate_with_pinn(model, initial_state, t_span, num_points,
     # Concatenate time and initial state: [t, theta1_0, theta2_0, omega1_0, omega2_0]
     if encoder is not None:
         tp = encoder(t_tensor)
-        x = torch.cat([t_tensor, tp, initial_state_batch], dim=1)
+        x = torch.cat([tp, initial_state_batch], dim=1)
     else:
         x = torch.cat([t_tensor, initial_state_batch], dim=1)
     
