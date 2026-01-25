@@ -12,13 +12,10 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
 
     if encoder is not None:
         tp = encoder(t)  # (N, encoded_size * 2)
-        model_input = torch.cat([tp, initial_state], dim=1)  # (N, encoded_size * 2 + 4)
+        model_input = torch.cat([initial_state, t, tp], dim=1)  # (N, encoded_size * 2 + 4 + 1)
     else:
-        model_input = torch.cat([t, initial_state], dim=1)
+        model_input = torch.cat([initial_state, t], dim=1)
     q_pred = model(model_input)  # (N, 2)
-    
-    if q_pred.grad_fn is None:
-        raise RuntimeError("q_pred has no grad_fn. The model is detaching the output!")
 
     qdot_pred, qdd_pred = compute_derivatives(q_pred, t)
 
@@ -34,9 +31,9 @@ def compute_loss(model, batch, parameters_tensor, loss_weights, residual_weights
     
     if encoder is not None:
         tp_zero = encoder(t_zero)
-        ic_input = torch.cat([tp_zero, initial_state], dim=1)
+        ic_input = torch.cat([initial_state, t_zero, tp_zero], dim=1)
     else:
-        ic_input = torch.cat([t_zero, initial_state], dim=1)
+        ic_input = torch.cat([initial_state, t_zero], dim=1)
     q_ic_pred = model(ic_input)  # (N, 2)
     
     # Compute derivatives at t=0
